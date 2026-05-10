@@ -217,4 +217,13 @@ export interface ZeroArenaConfig {
     ZeroArenaINFT?: string;
     ReencryptionOracle?: string;
   };
+  /**
+   * Oracle service private key. Required only for `transferAgent`. In v0.1
+   * the off-chain oracle is a trusted-signer stub (CLAUDE.md §3, §8); whoever
+   * runs the demo holds the same private key the on-chain ReencryptionOracle
+   * was deployed with. v0.2 swaps this for a TEE-attested service.
+   */
+  oraclePrivateKey?: string;
+  /** Override where AES keys are persisted. Defaults to `~/.zeroarena/keys`. */
+  keysDir?: string;
 }
