@@ -7,9 +7,12 @@
     "rootDir": "src",
     "declaration": true,
     "strict": true,
+    "noUncheckedIndexedAccess": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "lib": ["ES2022"],
+    "types": ["node"]
   },
   "include": ["src"]
 }
