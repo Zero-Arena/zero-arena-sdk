@@ -215,6 +215,10 @@ function runTs(): string {
   return `import { ZeroArena, CANONICAL_DATASETS, configFromEnv, loadEnv, type BacktestOptions } from 'zeroarena';
 import RsiAgent from './agent.js';
 
+// Pass --backtest-only to skip the chain calls (certify + mint). Useful for
+// first-run smoke checks before you fund the wallet in .env.
+const BACKTEST_ONLY = process.argv.includes('--backtest-only');
+
 const OPTS: BacktestOptions = {
   initialBalance: 10_000,
   market: 'spot',
@@ -234,6 +238,11 @@ async function main() {
   const agent = new RsiAgent();
   const result = await za.backtest(agent, dataset, OPTS);
   console.log(\`\\n▸ backtest\\n  runHash: \${result.runHash}\\n  return:  \${result.metrics.totalReturnBps} bps\\n  sharpe:  \${result.metrics.sharpeX1000 / 1000}\`);
+
+  if (BACKTEST_ONLY) {
+    console.log(\`\\n✓ backtest-only complete. Run \\\`npm start\\\` to certify + mint on 0G Chain.\`);
+    return;
+  }
 
   console.log(\`\\n▸ certifying on 0G Chain…\`);
   const cert = await za.certify(result);
