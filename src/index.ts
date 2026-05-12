@@ -30,6 +30,12 @@ export { HttpOracleClient, type HttpOracleClientConfig } from './inft/HttpOracle
 export { LocalOracleClient, type LocalOracleClientConfig } from './inft/LocalOracleClient.js';
 
 export { runBacktest, WARMUP } from './backtest/BacktestEngine.js';
+// Paper trading (RFC-001) — bar-by-bar engine + streaming indicator state.
+export { PaperEngine, PAPER_WARMUP } from './backtest/PaperEngine.js';
+export {
+  StreamingIndicators,
+  type StreamingObservation,
+} from './backtest/streaming-indicators.js';
 export {
   composeRunHash,
   hashAgent,
