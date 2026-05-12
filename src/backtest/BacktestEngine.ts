@@ -41,8 +41,46 @@ import { checkIntraBar } from './sltp.js';
 import { computeMetrics } from './metrics.js';
 import { composeRunHash, hashAgent, hashOptions, hashTrades } from './hash.js';
 
-/** Bars per year for a 1h granularity dataset. */
-const BARS_PER_YEAR_1H = 24 * 365;
+/**
+ * Bars per year for each supported candle granularity. Crypto trades 24/7,
+ * so we use 365 calendar days (not 252 trading days). The Sharpe / Sortino
+ * annualization in `metrics.ts` is `× sqrt(barsPerYear)` — wrong value here
+ * silently mis-scales every certified result.
+ *
+ * Until this table existed the engine hard-coded the 1h value (8760), which
+ * deflated Sharpe on a 15m dataset by sqrt(4) ≈ 2×.
+ */
+const BARS_PER_YEAR: Record<string, number> = {
+  '1m': 60 * 24 * 365,
+  '3m': 20 * 24 * 365,
+  '5m': 12 * 24 * 365,
+  '15m': 4 * 24 * 365,
+  '30m': 2 * 24 * 365,
+  '1h': 24 * 365,
+  '2h': 12 * 365,
+  '4h': 6 * 365,
+  '6h': 4 * 365,
+  '8h': 3 * 365,
+  '12h': 2 * 365,
+  '1d': 365,
+  '3d': 365 / 3,
+  '1w': 52,
+};
+
+/**
+ * Resolve the annualization factor for a dataset granularity string. Throws
+ * on unknown granularity — we'd rather fail loud than silently mis-annualize
+ * (per FORMULAS.md 7 "Determinism guarantees").
+ */
+export function resolveBarsPerYear(granularity: string): number {
+  const v = BARS_PER_YEAR[granularity];
+  if (v === undefined) {
+    throw new Error(
+      `resolveBarsPerYear: unsupported granularity "${granularity}". Supported: ${Object.keys(BARS_PER_YEAR).join(', ')}`,
+    );
+  }
+  return v;
+}
 
 /** Minimum candle index from which `decide` is called (all indicators fully warm). */
 export const WARMUP = 26;
@@ -184,7 +222,7 @@ export async function runBacktest(
     initialBalance: opts.initialBalance,
     equityCurve,
     trades,
-    barsPerYear: BARS_PER_YEAR_1H,
+    barsPerYear: resolveBarsPerYear(dataset.meta.granularity),
   });
 
   const agentHash = hashAgent(agent);

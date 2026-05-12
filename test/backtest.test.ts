@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { Agent } from '../src/agent/Agent.js';
-import { runBacktest } from '../src/backtest/BacktestEngine.js';
+import { resolveBarsPerYear, runBacktest } from '../src/backtest/BacktestEngine.js';
 import type { Action, BacktestOptions, Candle, Dataset, Observation } from '../src/types.js';
 import { keccak256, toUtf8Bytes } from 'ethers';
 
@@ -132,5 +132,74 @@ describe('BacktestEngine — output sanity', () => {
     expect(r.metrics.maxDrawdownBps).toBeGreaterThanOrEqual(0);
     expect(r.metrics.winRateBps).toBeGreaterThanOrEqual(0);
     expect(r.metrics.numTrades).toBe(r.trades.length);
+  });
+});
+
+describe('resolveBarsPerYear', () => {
+  it('returns the canonical bars-per-year for every supported granularity', () => {
+    expect(resolveBarsPerYear('1m')).toBe(525_600);
+    expect(resolveBarsPerYear('5m')).toBe(105_120);
+    expect(resolveBarsPerYear('15m')).toBe(35_040);
+    expect(resolveBarsPerYear('30m')).toBe(17_520);
+    expect(resolveBarsPerYear('1h')).toBe(8_760);
+    expect(resolveBarsPerYear('4h')).toBe(2_190);
+    expect(resolveBarsPerYear('1d')).toBe(365);
+  });
+
+  it('throws on an unknown granularity (fail-loud per FORMULAS.md 7)', () => {
+    expect(() => resolveBarsPerYear('17m')).toThrow(/unsupported granularity/);
+    expect(() => resolveBarsPerYear('')).toThrow(/unsupported granularity/);
+  });
+});
+
+describe('BacktestEngine — granularity-aware Sharpe annualization', () => {
+  // Same equity curve, two granularity tags → Sharpe scales by sqrt(ratio).
+  // 15m has 4× more bars/year than 1h, so Sharpe(15m) / Sharpe(1h) ≈ √4 = 2.
+  it('scales Sharpe by sqrt(barsPerYear ratio) when granularity changes', async () => {
+    const base = makeSineDataset('spot', 400);
+    const dataset15m: Dataset = { ...base, meta: { ...base.meta, granularity: '15m' } };
+    const dataset1h: Dataset = { ...base, meta: { ...base.meta, granularity: '1h' } };
+
+    const opts: BacktestOptions = { initialBalance: 10_000, market: 'spot' };
+    const r15 = await runBacktest(new RsiAgent(), dataset15m, opts);
+    const r1h = await runBacktest(new RsiAgent(), dataset1h, opts);
+
+    // Trades + equity identical (same candles + same agent).
+    expect(r15.tradesHash).toBe(r1h.tradesHash);
+    expect(r15.metrics.totalReturnBps).toBe(r1h.metrics.totalReturnBps);
+
+    // Sharpe should differ ONLY in the annualization factor.
+    if (r1h.metrics.sharpeX1000 !== 0) {
+      const ratio = r15.metrics.sharpeX1000 / r1h.metrics.sharpeX1000;
+      const expected = Math.sqrt(35_040 / 8_760); // = 2
+      // Allow 1% drift for integer rounding (sharpeX1000 is rounded).
+      expect(Math.abs(ratio - expected)).toBeLessThan(0.01);
+    }
+  });
+
+  it('rejects a dataset whose meta.granularity is not supported', async () => {
+    const bad = makeSineDataset('spot');
+    const broken: Dataset = { ...bad, meta: { ...bad.meta, granularity: '17m' } };
+    await expect(
+      runBacktest(new RsiAgent(), broken, { initialBalance: 10_000, market: 'spot' }),
+    ).rejects.toThrow(/unsupported granularity/);
+  });
+
+  it('runHash is invariant across granularity meta (commitment is over trades + dataset bytes)', async () => {
+    // runHash = keccak(agentHash || datasetHash || optionsHash || tradesHash).
+    // None of those depend on `meta.granularity` directly — datasetHash is
+    // already keccak256(CSV bytes), and the CSV embeds its meta in the header.
+    // So two Dataset objects with the same candles but different in-memory meta
+    // produce the same runHash (and the metrics differ, which is why this bug
+    // was silent on-chain pre-fix).
+    const base = makeSineDataset('spot', 200);
+    const dataset15m: Dataset = { ...base, meta: { ...base.meta, granularity: '15m' } };
+    const dataset1h: Dataset = { ...base, meta: { ...base.meta, granularity: '1h' } };
+    const opts: BacktestOptions = { initialBalance: 10_000, market: 'spot' };
+
+    const r15 = await runBacktest(new RsiAgent(), dataset15m, opts);
+    const r1h = await runBacktest(new RsiAgent(), dataset1h, opts);
+
+    expect(r15.runHash).toBe(r1h.runHash);
   });
 });
