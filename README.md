@@ -1,6 +1,6 @@
-# Zero Arena — SDK (`zeroarena`)
+# `zeroarena`
 
-> The TypeScript SDK + CLI for backtesting, certifying, and minting AI trading agents as ERC-7857 iNFTs on 0G — without leaking the agent's strategy.
+> Verifiable performance for AI trading agents. Backtest deterministically, anchor a certificate on 0G Chain, mint an ERC-7857 iNFT — without leaking your strategy.
 
 ```bash
 npm install zeroarena
@@ -33,79 +33,13 @@ const za = new ZeroArena({
 
 const dataset = await za.loadDataset({ rootHash: '0xabc…' });
 const result  = await za.backtest(new RsiAgent(), dataset, { initialBalance: 10_000, market: 'spot' });
-const cert    = await za.certify(result);                                       // T2 by default
+const cert    = await za.certify(result);
 const inft    = await za.mintAgent({ agent: new RsiAgent(), certificate: cert, name: 'RSI v1' });
 ```
 
-The full demo flow lives in [`zero-arena-example-agent/01-rsi-agent-btc-spot`](../examples/01-rsi-agent-btc-spot/).
-
-## CLI
-
-```bash
-npx zeroarena --help
-
-# Upload a canonical OHLCV CSV to 0G Storage
-npx zeroarena dataset upload ./btcusdt-15m.csv
-
-# Run a backtest end-to-end (agent module is dynamic-imported)
-npx zeroarena backtest --agent ./agent.ts --csv ./btcusdt-15m.csv --balance 10000
-
-# Certify a result on-chain
-npx zeroarena certify --agent ./agent.ts --csv ./btcusdt-15m.csv
-
-# Mint a passing certificate as an iNFT
-npx zeroarena mint --agent ./agent.ts --cert 1 --name 'RSI v1' \
-  --run-hash 0x… --storage-root 0x… --dataset-hash 0x…
-```
-
-Configuration is read from `.env` — copy [`.env.example`](./.env.example) to start.
-The default canonical dataset is **BTC/USDT 15-minute spot** candles, maintained by the [`zero-arena-bacend`](https://github.com/Zero-Arena/zero-arena-bacend) service.
-
-## Transferring an iNFT
-
-`transferAgent()` is the only call that needs an oracle. The SDK never holds the oracle's private key — you point it at a running [`zero-arena-bacend`](../zero-arena-bacend/) `oracle:serve` instance via `HttpOracleClient`:
-
-```ts
-import { ZeroArena, HttpOracleClient } from 'zeroarena';
-
-const za = new ZeroArena({
-  rpc, indexer, privateKey,
-  addresses: { ... },
-  oracle: new HttpOracleClient({
-    url: 'https://oracle.example.com',
-    headers: { authorization: 'Bearer <token>' }, // optional bearer gate
-  }),
-});
-
-await za.transferAgent({ tokenId, to, recipientPubKey });
-```
-
-If you operate the oracle yourself and accept the trusted-stub model, swap in `LocalOracleClient({ privateKey })` at construction — explicit, dev-only, and never auto-loaded from `.env`.
-
-## What the SDK gives you
-
-- A deterministic `BacktestEngine` (no `Math.random`, no `Date.now`, fixed iteration order). Same agent + same dataset → same `runHash`, byte-identical, every time.
-- Spot and perpetual-futures markets. Perp adds configurable leverage (capped at 10× in v0.1), 8h funding accrual, and isolated-margin liquidation.
-- AES-256-GCM authenticated encryption for run logs and agent metadata. Agent code never leaves your machine in plaintext.
-- 0G Storage upload via [`@0gfoundation/0g-storage-ts-sdk`](https://www.npmjs.com/package/@0gfoundation/0g-storage-ts-sdk) (real, not mocked).
-- 0G Chain anchoring via `AgentCertificate.submit` — `runHash`, storage root, dataset root, headline metrics, and a `trustTier` tag.
-- ERC-7857 iNFT mint + transfer with oracle re-encryption (`ZeroArenaINFT`).
-
-## Trust model
-
-The certificate is tagged with the tier under which it shipped. v0.1 ships **T1 + T2**:
-
-- **T1 — Commitment.** `runHash` anchored on-chain. Trades cannot be edited after submission.
-- **T2 — Reproducibility.** Owner can authorize a verifier with the encrypted agent + key; verifier reruns and asserts the same `runHash`.
-- **T3 — TEE attestation** *(v0.2)*. `BacktestEngine` + the developer's agent run inside a 0G Compute enclave (Intel TDX + NVIDIA H100/H200) used purely as a confidential-compute substrate. Trustless verification by anyone, agent code never revealed.
-
-The `Certificate` struct already reserves `trustTier` and `attestationHash` slots so v0.2 is wiring, not redesign. Full trust-model table lives in [`CLAUDE.md` 3](../CLAUDE.md).
-
-**The SDK is model-agnostic.** Whatever you put inside `decide()` — a rule, an LLM call, a self-hosted model, an RL policy — is your choice. We don't bundle, recommend, or depend on any model.
+`PRIVATE_KEY` is your own wallet — pays gas, signs the tx, owns the iNFT.
 
 ## Public API
-
-Locked down per [`CLAUDE.md` 7](../CLAUDE.md). The shapes you can rely on:
 
 ```ts
 class ZeroArena {
@@ -124,27 +58,63 @@ abstract class Agent {
 }
 ```
 
+`transferAgent()` requires an `OracleClient`. Pass it at construction:
+
+```ts
+import { ZeroArena, HttpOracleClient } from 'zeroarena';
+
+const za = new ZeroArena({
+  ...,
+  oracle: new HttpOracleClient({ url: 'https://your-oracle.example.com' }),
+});
+```
+
+## CLI
+
+```bash
+npx zeroarena dataset upload ./btcusdt-15m.csv
+npx zeroarena backtest --agent ./agent.ts --csv ./btcusdt-15m.csv --balance 10000
+npx zeroarena certify  --agent ./agent.ts --csv ./btcusdt-15m.csv
+npx zeroarena mint     --agent ./agent.ts --cert 1 --name 'RSI v1' \
+  --run-hash 0x… --storage-root 0x… --dataset-hash 0x…
+```
+
+CLI reads `process.env`: `PRIVATE_KEY`, `ZA_RPC`, `ZA_INDEXER`, `ZA_ADDR_CERT`, `ZA_ADDR_INFT`, `ZA_ADDR_ORACLE`.
+
+## What you get
+
+- Deterministic `BacktestEngine` (no `Math.random`, no `Date.now`). Same agent + same dataset → same `runHash`, byte-identical.
+- Spot and perpetual futures. Perp adds configurable leverage (≤10×), 8h funding accrual, isolated-margin liquidation.
+- AES-256-GCM encryption on run logs and agent metadata — your code never leaves the machine in plaintext.
+- 0G Storage upload via `@0gfoundation/0g-storage-ts-sdk`.
+- 0G Chain anchoring of `runHash`, storage root, dataset root, metrics, and `trustTier`.
+- ERC-7857 mint + oracle re-encryption transfer.
+
+Model-agnostic: whatever runs inside `decide()` — a rule, an LLM call, an RL policy — is your choice.
+
+## Trust model
+
+Each certificate is tagged with its tier. v0.1 ships T1 + T2:
+
+- **T1 — Commitment.** `runHash` anchored on-chain. Trades cannot be edited after submission.
+- **T2 — Reproducibility.** Owner can authorize a verifier with the encrypted run log + AES key; verifier reruns and asserts the same `runHash`.
+- **T3 — TEE attestation** *(future)*. Engine + agent run inside a 0G Compute enclave; trustless verification by anyone, agent code never revealed.
+
 ## Determinism contract
 
-The whole verifiability story collapses if backtests aren't reproducible. The SDK enforces:
+The verifiability story collapses if backtests aren't reproducible. The engine enforces:
 
-1. No `Math.random` in `BacktestEngine`. Use a seeded PRNG if randomness is ever needed.
-2. No `Date.now`. Always use `obs.timestamp`.
-3. Indicator math uses fixed iteration order. No `for…in` on objects in the hot path.
-4. `runHash = keccak256(agentHash || datasetHash || optionsHash || tradesHash)`, with stable JSON for each component.
-5. CI runs the same agent + dataset 10 times and asserts every `runHash` matches.
+1. No `Math.random` — seed a PRNG if you need randomness.
+2. No `Date.now` — use `obs.timestamp`.
+3. Fixed iteration order; no `for…in` over objects in the hot path.
+4. `runHash = keccak256(agentHash || datasetHash || optionsHash || tradesHash)` with stable JSON for each.
 
-Agents that call out to non-deterministic sources (e.g., LLM APIs) are still cryptographically committed via `runHash` — but the certificate is honest about T2 only. T3 (TEE) lifts this; see [`CLAUDE.md` 14](../CLAUDE.md).
-
-## Cross-repo coupling
-
-- ABIs + deployed addresses come from [`@zero-arena/contracts`](../contracts).
-- Reference agents and runnable demos live in [`zero-arena-example-agent`](../examples).
+Non-deterministic sources (LLM APIs) are still committed via `runHash`, but the certificate stays at T2 only.
 
 ## Known issues
 
-- **Upstream `axios` advisories.** `@0gfoundation/0g-storage-ts-sdk@1.2.9` transitively depends on an old `axios` via `open-jsonrpc-provider`. `npm audit` reports three high-severity advisories in the prototype-pollution / DoS class. The vulnerable code path is the storage SDK's internal JSON-RPC client, which only talks to the 0G indexer + EVM RPC endpoints you configure — there is no user-controlled input route into it from `zeroarena`. We track upstream fixes; v1.2.9 is the latest published.
+- `@0gfoundation/0g-storage-ts-sdk@1.2.9` transitively depends on an old `axios`. `npm audit` flags it; the vulnerable code path only talks to the 0G endpoints you configure and is not reachable from any consumer input.
 
 ## License
 
-MIT — see [LICENSE](./LICENSE).
+MIT.
