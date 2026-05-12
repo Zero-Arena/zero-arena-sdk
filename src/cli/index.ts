@@ -7,7 +7,8 @@
 //   - mint
 //
 // All shared config (RPC, indexer, contract addresses, signer key) is read
-// from the environment — see sdk/.env.example for the full list.
+// from the environment: PRIVATE_KEY, ZA_RPC, ZA_INDEXER, ZA_ADDR_CERT,
+// ZA_ADDR_INFT, ZA_ADDR_ORACLE.
 
 import { createRequire } from 'node:module';
 import { Command } from 'commander';
