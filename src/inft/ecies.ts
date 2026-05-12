@@ -6,7 +6,7 @@
 // On the recipient side, derive the shared secret via ECDH(recipientPriv,
 // ephemeralPub), HKDF it to a 32-byte AES key, then AES-256-GCM-decrypt the
 // 32-byte payload. This is the v0.1 stub — production swaps this for the
-// 0G Compute TEE-attested re-encryption flow (see CLAUDE.md §3, §14).
+// 0G Compute TEE-attested re-encryption flow (see CLAUDE.md 3, 14).
 
 import { createCipheriv, createDecipheriv, createECDH, hkdfSync, randomBytes } from 'node:crypto';
 

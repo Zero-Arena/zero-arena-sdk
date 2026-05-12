@@ -2,7 +2,7 @@
 // portfolio code applies. Defaults are Binance VIP-0 (no BNB discount) — the
 // worst case a retail user pays, so backtests don't over-state edge.
 //
-// Sources (see FORMULAS.md §1):
+// Sources (see FORMULAS.md 1):
 //   Spot:  https://www.binance.com/en/fee/schedule
 //   Perp:  https://www.binance.com/en/fee/futureFee
 //   Mech.: https://www.binance.com/en/support/faq/detail/360033544231

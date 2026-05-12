@@ -3,7 +3,7 @@
 // the candle's `fundingRate` field — funding is part of the dataset, not a
 // live feed.
 //
-// Math reference: see FORMULAS.md §4 ("Perpetual futures portfolio").
+// Math reference: see FORMULAS.md 4 ("Perpetual futures portfolio").
 //   Funding:      https://www.binance.com/en/support/faq/introduction-to-binance-futures-funding-rates-360033525031
 //   Liquidation:  https://www.binance.com/en/support/faq/how-to-calculate-liquidation-price-of-usd%E2%93%A2-m-futures-contracts-b3c689c1f50a44cabb3a84e663b81d93
 //   MMR & cum:    https://www.binance.com/en/support/faq/detail/360033162192
@@ -75,7 +75,7 @@ export function perpSLTPLevels(state: PerpState): SLTPLevels {
 }
 
 /**
- * Funding payment per FORMULAS.md §4.3:
+ * Funding payment per FORMULAS.md 4.3:
  *   funding = positionNotional × fundingRate           (signed)
  *   cash   -= funding
  *

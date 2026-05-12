@@ -283,7 +283,7 @@ winRate = #(positions with realizedPnL > 0) / #(closed positions)
 
 ---
 
-## 7. Determinism guarantees (CLAUDE.md §7)
+## 7. Determinism guarantees (CLAUDE.md 7)
 
 Every formula in this document is evaluated using `Number` arithmetic with
 fixed iteration order. The engine is byte-deterministic: the same

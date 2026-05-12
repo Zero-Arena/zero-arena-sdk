@@ -1,6 +1,6 @@
 // Liquidation math — closed-form Binance USDⓈ-M (isolated margin, one-way).
 //
-// Formula (FORMULAS.md §4.4):
+// Formula (FORMULAS.md 4.4):
 //   LONG  : LP = (pos·entry − WB − cum) / (pos·(1 − MMR))
 //   SHORT : LP = (pos·entry − WB − cum) / (pos·(1 + MMR))
 //

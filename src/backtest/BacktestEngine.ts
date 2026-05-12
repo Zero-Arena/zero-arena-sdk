@@ -2,16 +2,16 @@
 // module producing byte-identical `runHash` values across runs of the same
 // (agent, dataset, options) tuple.
 //
-// Determinism rules — see CLAUDE.md §7:
+// Determinism rules — see CLAUDE.md 7:
 //  1. No `Math.random` anywhere in the path. (Use a seeded PRNG if ever needed.)
 //  2. No `Date.now`. Use `candle.timestamp`.
 //  3. No object iteration in the hot path — use arrays + numeric indices.
 //  4. Indicators are pre-computed once with fixed iteration order.
 //
 // Per-bar event order (perp shown; spot drops funding & liquidation):
-//  1. Funding accrual         (FORMULAS.md §4.3)
-//  2. Liquidation check       (FORMULAS.md §4.4)         worst-mark = low (long) / high (short)
-//  3. SL / TP intra-bar check (FORMULAS.md §5)
+//  1. Funding accrual         (FORMULAS.md 4.3)
+//  2. Liquidation check       (FORMULAS.md 4.4)         worst-mark = low (long) / high (short)
+//  3. SL / TP intra-bar check (FORMULAS.md 5)
 //  4. agent.decide()          observation snapshot at the bar's close
 //  5. apply action            (open/adjust/flip/flat, refreshes SL/TP)
 //  6. record equity at close

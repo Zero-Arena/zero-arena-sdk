@@ -14,7 +14,7 @@
 //     path wins. If the inferred path doesn't disambiguate, SL wins
 //     (worst-case-for-trader bias).
 //
-// See FORMULAS.md §5 for the full table and citations.
+// See FORMULAS.md 5 for the full table and citations.
 
 import type { Candle } from '../types.js';
 

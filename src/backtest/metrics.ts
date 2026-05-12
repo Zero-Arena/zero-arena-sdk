@@ -2,7 +2,7 @@
 // are too. All values that go on-chain are rounded to integers (basis points or
 // scaled multiples).
 //
-// Math reference: see FORMULAS.md §6.
+// Math reference: see FORMULAS.md 6.
 //   Sharpe:       https://en.wikipedia.org/wiki/Sharpe_ratio
 //   Sortino:      https://en.wikipedia.org/wiki/Sortino_ratio
 //   Drawdown:     https://en.wikipedia.org/wiki/Drawdown_(economics)
@@ -62,7 +62,7 @@ export function computeMetrics(input: MetricsInput): Metrics {
  *   sharpe   = (mean(r) / std(r))               × sqrt(barsPerYear)
  *   sortino  = (mean(r) / downsideStd(r))       × sqrt(barsPerYear)
  *
- * Both use rf = 0 / target = 0 in v0.1. See FORMULAS.md §6.2 / §6.3.
+ * Both use rf = 0 / target = 0 in v0.1. See FORMULAS.md 6.2 / 6.3.
  */
 function annualizedRiskRatios(
   equity: number[],

@@ -1,7 +1,7 @@
 // Spot portfolio. Long-only in v0.1 — short signals on a spot dataset are
 // interpreted as "go flat" rather than reversing into a short.
 //
-// Math reference: see FORMULAS.md §3 ("Spot portfolio") and §1 ("Trading fees").
+// Math reference: see FORMULAS.md 3 ("Spot portfolio") and 1 ("Trading fees").
 //   Binance Spot Fee Schedule: https://www.binance.com/en/fee/schedule
 
 import type { Action, BacktestOptions, Trade, TradeReason } from '../types.js';

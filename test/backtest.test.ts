@@ -1,4 +1,4 @@
-// The mandatory determinism test from CLAUDE.md §7. The whole verification
+// The mandatory determinism test from CLAUDE.md 7. The whole verification
 // protocol depends on `runHash` being byte-identical across repeated runs of
 // the same (agent, dataset, options) tuple.
 
@@ -62,7 +62,7 @@ function makeSineDataset(market: 'spot' | 'perp', n = 500): Dataset {
   };
 }
 
-describe('BacktestEngine — determinism (CLAUDE.md §7 critical test)', () => {
+describe('BacktestEngine — determinism (CLAUDE.md 7 critical test)', () => {
   it('produces the same runHash 10 times in a row (spot, RSI agent)', async () => {
     const dataset = makeSineDataset('spot');
     const opts: BacktestOptions = { initialBalance: 10_000, market: 'spot' };

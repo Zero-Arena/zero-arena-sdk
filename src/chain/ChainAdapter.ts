@@ -46,7 +46,7 @@ export interface ChainConfig {
 export interface SubmitCertificateInput {
   result: BacktestResult;
   storageRootHash: string; // 0x-hex bytes32 — root of the encrypted run-log envelope
-  trustTier?: TrustTier; // defaults to T2 in v0.1 per CLAUDE.md §3
+  trustTier?: TrustTier; // defaults to T2 in v0.1 per CLAUDE.md 3
   attestationHash?: string; // 0x0 unless trustTier === 'T3'
 }
 
