@@ -119,6 +119,10 @@ Agents that call out to non-deterministic sources (e.g., LLM APIs) are still cry
 - ABIs + deployed addresses come from [`@zero-arena/contracts`](../contracts).
 - Reference agents and runnable demos live in [`zero-arena-example-agent`](../examples).
 
+## Known issues
+
+- **Upstream `axios` advisories.** `@0gfoundation/0g-storage-ts-sdk@1.2.9` transitively depends on an old `axios` via `open-jsonrpc-provider`. `npm audit` reports three high-severity advisories in the prototype-pollution / DoS class. The vulnerable code path is the storage SDK's internal JSON-RPC client, which only talks to the 0G indexer + EVM RPC endpoints you configure — there is no user-controlled input route into it from `zeroarena`. We track upstream fixes; v1.2.9 is the latest published.
+
 ## License
 
-MIT.
+MIT — see [LICENSE](./LICENSE).

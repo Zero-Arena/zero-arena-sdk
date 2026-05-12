@@ -1,17 +1,36 @@
 {
   "name": "zeroarena",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Verifiable AI trading agents on 0G — backtest, certify, mint as ERC-7857 iNFT.",
   "license": "MIT",
+  "author": "Zero Arena Contributors",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "sideEffects": false,
   "files": [
-    "dist"
+    "dist",
+    "LICENSE",
+    "README.md"
   ],
   "bin": {
     "zeroarena": "dist/cli/index.js"
   },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "0g",
+    "trading",
+    "agent",
+    "backtest",
+    "verifiable",
+    "erc-7857",
+    "inft",
+    "tee",
+    "deterministic",
+    "blockchain"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
@@ -29,10 +48,15 @@
     "vitest": "^2.0.0"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Zero-Arena/zero-arena-sdk.git"
+  },
+  "homepage": "https://github.com/Zero-Arena/zero-arena-sdk#readme",
+  "bugs": {
+    "url": "https://github.com/Zero-Arena/zero-arena-sdk/issues"
   }
 }
