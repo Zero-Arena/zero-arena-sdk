@@ -2,6 +2,18 @@
 
 > Verifiable performance for AI trading agents. Backtest deterministically, anchor a certificate on 0G Chain, mint an ERC-7857 iNFT — without leaking your strategy.
 
+## Scaffold a project in one command
+
+```bash
+npx zeroarena init my-agent
+cd my-agent
+npm start                # backtest → certify → mint, end-to-end
+```
+
+The init flow asks how you want to set up your wallet (paste your own, generate one with `cast wallet new`, or fill `.env` later), then writes a minimal project: `agent.ts`, `run.ts`, `.env`, `package.json`. Galileo addresses are pre-pinned.
+
+## Or install manually
+
 ```bash
 npm install zeroarena
 ```
@@ -72,7 +84,8 @@ const za = new ZeroArena({
 ## CLI
 
 ```bash
-npx zeroarena dataset upload ./btcusdt-15m.csv
+npx zeroarena init     my-agent
+npx zeroarena dataset  upload ./btcusdt-15m.csv
 npx zeroarena backtest --agent ./agent.ts --csv ./btcusdt-15m.csv --balance 10000
 npx zeroarena certify  --agent ./agent.ts --csv ./btcusdt-15m.csv
 npx zeroarena mint     --agent ./agent.ts --cert 1 --name 'RSI v1' \
