@@ -46,3 +46,5 @@ export const parseDatasetFile = _StorageAdapterImpl.parseDatasetFile.bind(_Stora
 export { StorageAdapter } from './storage/StorageAdapter.js';
 
 export { loadEnv, configFromEnv, type ResolvedConfig } from './cli/env.js';
+
+export { CANONICAL_DATASETS, type CanonicalDataset } from './datasets.js';
