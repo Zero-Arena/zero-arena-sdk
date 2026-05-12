@@ -14,7 +14,13 @@ export type Market = 'spot' | 'perp';
 export type TrustTier = 'T1' | 'T2' | 'T3';
 
 /** Reason a trade was emitted. Used for analytics + run-log forensics. */
-export type TradeReason = 'open' | 'close' | 'flip' | 'liquidation';
+export type TradeReason =
+  | 'open'
+  | 'close'
+  | 'flip'
+  | 'liquidation'
+  | 'stop_loss'
+  | 'take_profit';
 
 /** A single OHLCV bar. `fundingRate` is set on perp candles where 8h funding accrues. */
 export interface Candle {
@@ -99,6 +105,17 @@ export interface Action {
    * Notional traded = equity * size * leverage. size=0 implies "go flat".
    */
   size: number;
+  /**
+   * Optional protective stop-loss in quote price. The engine checks this
+   * intra-bar (TradingView convention — see FORMULAS.md §5) on the bar AFTER
+   * the action is applied. Pass `0` or omit to clear.
+   */
+  stopLoss?: number;
+  /**
+   * Optional take-profit in quote price. Same intra-bar resolution as `stopLoss`.
+   * Pass `0` or omit to clear.
+   */
+  takeProfit?: number;
 }
 
 /** Backtest configuration. */
@@ -109,12 +126,34 @@ export interface BacktestOptions {
   market: Market;
   /** Perp leverage — ignored on spot. Capped at 10 in v0.1. Default 1. */
   leverage?: number;
-  /** Taker fee in basis points. Default 10 (0.10%). */
+  /**
+   * @deprecated Use `takerFeeBps` (and optionally `makerFeeBps`). When set, used
+   * as the taker fee fallback. Kept for one minor version of backward compat.
+   */
   feeBps?: number;
+  /**
+   * Maker fee in basis points (Binance VIP-0 default: 10 spot, 2 perp).
+   * Reserved for v0.2 limit-order support; ignored in v0.1 (every fill is taker).
+   */
+  makerFeeBps?: number;
+  /**
+   * Taker fee in basis points (Binance VIP-0 default: 10 spot, 5 perp).
+   * Source: https://www.binance.com/en/fee/schedule, https://www.binance.com/en/fee/futureFee
+   */
+  takerFeeBps?: number;
   /** Slippage applied per fill in basis points. Default 5 (0.05%). */
   slippageBps?: number;
-  /** Maintenance margin (perp only) in basis points of notional. Default 500 (5%). */
+  /**
+   * Maintenance margin rate (perp only) in basis points of notional. Default 500
+   * (5%). v0.1 uses a flat MMR; v0.2 will load Binance's tiered table.
+   * Source: https://www.binance.com/en/support/faq/detail/360033162192
+   */
   liquidationMarginBps?: number;
+  /**
+   * Maintenance amount "cum" (perp only) in quote currency. v0.1 default 0.
+   * Source: https://www.binance.com/en/support/faq/how-to-calculate-liquidation-price-of-usd%E2%93%A2-m-futures-contracts-b3c689c1f50a44cabb3a84e663b81d93
+   */
+  maintenanceAmount?: number;
 }
 
 /** A single executed trade. */
@@ -124,7 +163,7 @@ export interface Trade {
   /** Candle timestamp (ms). */
   timestamp: number;
   side: Side;
-  /** Fill price (close * (1 ± slippage)). */
+  /** Fill price (close * (1 ± slippage), or trigger price for SL/TP). */
   price: number;
   /** Position change in base units (always positive). */
   size: number;
@@ -132,17 +171,29 @@ export interface Trade {
   fee: number;
   /** Why the engine emitted this trade. */
   reason: TradeReason;
+  /**
+   * Realized PnL on the closing leg, in quote currency, net of this trade's fee.
+   * Set on `close`/`flip`/`liquidation`/`stop_loss`/`take_profit`. `0` on `open`.
+   */
+  realizedPnl: number;
 }
 
 /** Aggregate metrics computed from the equity curve and trade log. */
 export interface Metrics {
   /** Total return in basis points (signed). +500 = +5%. */
   totalReturnBps: number;
-  /** Annualized Sharpe ratio × 1000, rounded. */
+  /** Annualized Sharpe ratio × 1000, rounded. See FORMULAS.md §6.2. */
   sharpeX1000: number;
+  /** Annualized Sortino ratio × 1000, rounded. See FORMULAS.md §6.3. */
+  sortinoX1000: number;
   /** Maximum peak-to-trough drawdown in basis points (unsigned). */
   maxDrawdownBps: number;
-  /** Win rate of closed trades, in basis points. */
+  /**
+   * Profit factor × 1000, rounded. Capped at 100_000 (= 100×) when there are no
+   * losing trades. 0 when there are no winning trades. See FORMULAS.md §6.5.
+   */
+  profitFactorX1000: number;
+  /** Win rate of closed positions, in basis points. */
   winRateBps: number;
   /** Number of executed trades. */
   numTrades: number;

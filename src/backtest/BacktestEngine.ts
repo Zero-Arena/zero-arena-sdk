@@ -7,19 +7,37 @@
 //  2. No `Date.now`. Use `candle.timestamp`.
 //  3. No object iteration in the hot path — use arrays + numeric indices.
 //  4. Indicators are pre-computed once with fixed iteration order.
+//
+// Per-bar event order (perp shown; spot drops funding & liquidation):
+//  1. Funding accrual         (FORMULAS.md §4.3)
+//  2. Liquidation check       (FORMULAS.md §4.4)         worst-mark = low (long) / high (short)
+//  3. SL / TP intra-bar check (FORMULAS.md §5)
+//  4. agent.decide()          observation snapshot at the bar's close
+//  5. apply action            (open/adjust/flip/flat, refreshes SL/TP)
+//  6. record equity at close
 
 import type { Agent } from '../agent/Agent.js';
 import type { BacktestOptions, BacktestResult, Dataset, Observation, Trade } from '../types.js';
 import { ema, macd, rsi } from './indicators.js';
-import { applySpotAction, newSpotState, spotEquity, type SpotState } from './portfolio.js';
+import {
+  applySpotAction,
+  newSpotState,
+  spotEquity,
+  spotForceCloseAt,
+  spotSLTPLevels,
+  type SpotState,
+} from './portfolio.js';
 import {
   accrueFunding,
   applyPerpAction,
   maybeLiquidate,
   newPerpState,
   perpEquity,
+  perpForceCloseAt,
+  perpSLTPLevels,
   type PerpState,
 } from './perp.js';
+import { checkIntraBar } from './sltp.js';
 import { computeMetrics } from './metrics.js';
 import { composeRunHash, hashAgent, hashOptions, hashTrades } from './hash.js';
 
@@ -59,9 +77,20 @@ export async function runBacktest(
   if (opts.market === 'spot') {
     const state = newSpotState(opts);
     for (let i = 0; i < n; i++) {
-      const candle = candles[i] as { timestamp: number; open: number; high: number; low: number; close: number; volume: number };
-      const close = candle.close;
+      const candle = candles[i] as {
+        timestamp: number; open: number; high: number; low: number; close: number; volume: number;
+      };
 
+      // 1. SL/TP intra-bar check before the agent acts.
+      if (state.position > 0) {
+        const trig = checkIntraBar(candle, spotSLTPLevels(state), 1);
+        if (trig) {
+          const t = spotForceCloseAt(state, trig.fillPrice, trig.kind, i, candle.timestamp);
+          if (t) trades.push(t);
+        }
+      }
+
+      // 2. Agent decision at close.
       if (i >= WARMUP) {
         const obs: Observation = {
           timestamp: candle.timestamp,
@@ -77,32 +106,52 @@ export async function runBacktest(
           macd: macdResult.macd[i] as number,
           macdSignal: macdResult.signal[i] as number,
           position: state.position,
-          equity: spotEquity(state, close),
+          equity: spotEquity(state, candle.close),
           cash: state.cash,
           leverage: 1,
         };
         const action = await Promise.resolve(agent.decide(obs));
-        const produced = applySpotAction(state, action, i, candle.timestamp, close);
+        const produced = applySpotAction(state, action, i, candle.timestamp, candle.close);
         for (let j = 0; j < produced.length; j++) trades.push(produced[j] as Trade);
       }
 
-      equityCurve[i] = spotEquity(state, close);
+      equityCurve[i] = spotEquity(state, candle.close);
     }
   } else {
     const state = newPerpState(opts);
     for (let i = 0; i < n; i++) {
-      const candle = candles[i] as { timestamp: number; open: number; high: number; low: number; close: number; volume: number; fundingRate?: number };
-      const close = candle.close;
+      const candle = candles[i] as {
+        timestamp: number; open: number; high: number; low: number; close: number; volume: number;
+        fundingRate?: number;
+      };
 
-      // Funding accrues at the start of the bar (using prior close ~ open ≈ close).
+      // 1. Funding accrues at the start of the bar.
       if (candle.fundingRate !== undefined && candle.fundingRate !== 0) {
-        accrueFunding(state, close, candle.fundingRate);
+        accrueFunding(state, candle.open, candle.fundingRate);
       }
 
-      // Margin check on the new bar before the agent acts.
-      const liq = maybeLiquidate(state, i, candle.timestamp, close);
-      if (liq) trades.push(liq);
+      // 2. Liquidation check using the bar's worst-case mark for the position
+      //    direction (low for longs, high for shorts).
+      if (state.position !== 0) {
+        const worstMark = state.position > 0 ? candle.low : candle.high;
+        const liq = maybeLiquidate(state, i, candle.timestamp, candle.close, worstMark);
+        if (liq) trades.push(liq);
+      }
 
+      // 3. SL/TP intra-bar check (skipped if liquidation already closed the position).
+      if (state.position !== 0) {
+        const trig = checkIntraBar(
+          candle,
+          perpSLTPLevels(state),
+          state.position > 0 ? 1 : -1,
+        );
+        if (trig) {
+          const t = perpForceCloseAt(state, trig.fillPrice, trig.kind, i, candle.timestamp);
+          if (t) trades.push(t);
+        }
+      }
+
+      // 4. Agent decision at close.
       if (i >= WARMUP) {
         const obs: Observation = {
           timestamp: candle.timestamp,
@@ -118,16 +167,16 @@ export async function runBacktest(
           macd: macdResult.macd[i] as number,
           macdSignal: macdResult.signal[i] as number,
           position: state.position,
-          equity: perpEquity(state, close),
+          equity: perpEquity(state, candle.close),
           cash: state.cash,
           leverage: state.leverage,
         };
         const action = await Promise.resolve(agent.decide(obs));
-        const produced = applyPerpAction(state, action, i, candle.timestamp, close);
+        const produced = applyPerpAction(state, action, i, candle.timestamp, candle.close);
         for (let j = 0; j < produced.length; j++) trades.push(produced[j] as Trade);
       }
 
-      equityCurve[i] = perpEquity(state, close);
+      equityCurve[i] = perpEquity(state, candle.close);
     }
   }
 

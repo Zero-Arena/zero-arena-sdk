@@ -82,14 +82,14 @@ describe('hashOptions', () => {
 
 describe('hashTrades', () => {
   it('is independent of trade-object property iteration order', () => {
-    const t1: Trade = { index: 0, timestamp: 0, side: 'buy', price: 1, size: 1, fee: 0, reason: 'open' };
-    const t2 = { reason: 'open', size: 1, price: 1, side: 'buy', timestamp: 0, fee: 0, index: 0 } as Trade;
+    const t1: Trade = { index: 0, timestamp: 0, side: 'buy', price: 1, size: 1, fee: 0, reason: 'open', realizedPnl: 0 };
+    const t2 = { reason: 'open', realizedPnl: 0, size: 1, price: 1, side: 'buy', timestamp: 0, fee: 0, index: 0 } as Trade;
     expect(hashTrades([t1])).toBe(hashTrades([t2]));
   });
 
   it('is sensitive to trade order', () => {
-    const t1: Trade = { index: 0, timestamp: 0, side: 'buy', price: 1, size: 1, fee: 0, reason: 'open' };
-    const t2: Trade = { index: 1, timestamp: 0, side: 'sell', price: 2, size: 1, fee: 0, reason: 'close' };
+    const t1: Trade = { index: 0, timestamp: 0, side: 'buy', price: 1, size: 1, fee: 0, reason: 'open', realizedPnl: 0 };
+    const t2: Trade = { index: 1, timestamp: 0, side: 'sell', price: 2, size: 1, fee: 0, reason: 'close', realizedPnl: 0 };
     expect(hashTrades([t1, t2])).not.toBe(hashTrades([t2, t1]));
   });
 });

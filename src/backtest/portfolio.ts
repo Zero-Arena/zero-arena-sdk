@@ -1,21 +1,40 @@
 // Spot portfolio. Long-only in v0.1 — short signals on a spot dataset are
 // interpreted as "go flat" rather than reversing into a short.
+//
+// Math reference: see FORMULAS.md §3 ("Spot portfolio") and §1 ("Trading fees").
+//   Binance Spot Fee Schedule: https://www.binance.com/en/fee/schedule
 
 import type { Action, BacktestOptions, Trade, TradeReason } from '../types.js';
+import { resolveFees } from './fees.js';
+import { checkIntraBar, type SLTPLevels } from './sltp.js';
 
 export interface SpotState {
   cash: number;
   position: number; // base units, always >= 0 on spot
-  feeBps: number;
+  /** Average entry price of the open position; 0 when flat. Used for realized PnL. */
+  entryPrice: number;
+  /** Maker fee as a decimal (reserved for v0.2 limit orders). */
+  makerRate: number;
+  /** Taker fee as a decimal (charged on every v0.1 fill). */
+  takerRate: number;
   slippageBps: number;
+  /** Active stop-loss price; 0 means none. */
+  stopLoss: number;
+  /** Active take-profit price; 0 means none. */
+  takeProfit: number;
 }
 
 export function newSpotState(opts: BacktestOptions): SpotState {
+  const fees = resolveFees(opts);
   return {
     cash: opts.initialBalance,
     position: 0,
-    feeBps: opts.feeBps ?? 10,
+    entryPrice: 0,
+    makerRate: fees.makerRate,
+    takerRate: fees.takerRate,
     slippageBps: opts.slippageBps ?? 5,
+    stopLoss: 0,
+    takeProfit: 0,
   };
 }
 
@@ -23,12 +42,32 @@ export function spotEquity(state: SpotState, mark: number): number {
   return state.cash + state.position * mark;
 }
 
+/** Active SL/TP levels in the form `sltp.checkIntraBar` expects. */
+export function spotSLTPLevels(state: SpotState): SLTPLevels {
+  return { stopLoss: state.stopLoss, takeProfit: state.takeProfit };
+}
+
 /**
- * Apply an action to the spot portfolio at `close[index]`.
+ * Trigger SL/TP intra-bar before the agent's `decide` runs on the new candle.
+ * Returns a trade if the position was force-closed by SL/TP, or null otherwise.
  *
- * Returns any trades produced. The state is mutated in place — callers are
- * expected to track the equity curve separately if they need it.
+ * `triggerPrice` is the resolved fill price (level itself, except on gaps).
  */
+export function spotForceCloseAt(
+  state: SpotState,
+  triggerPrice: number,
+  reason: 'stop_loss' | 'take_profit',
+  index: number,
+  timestamp: number,
+): Trade | null {
+  if (state.position <= 0) return null;
+  // Slippage on the protective fill — sells go against by `slippageBps`.
+  const slip = state.slippageBps / 10_000;
+  const fillPrice = triggerPrice * (1 - slip);
+  return sellAll(state, index, timestamp, fillPrice, reason);
+}
+
+/** Apply an action to the spot portfolio at `close[index]`. */
 export function applySpotAction(
   state: SpotState,
   action: Action,
@@ -49,6 +88,8 @@ export function applySpotAction(
       const trade = sellAll(state, index, timestamp, close, 'close');
       if (trade) trades.push(trade);
     }
+    state.stopLoss = 0;
+    state.takeProfit = 0;
     return trades;
   }
 
@@ -60,15 +101,19 @@ export function applySpotAction(
 
   // Tolerance: ignore micro-rebalances < 1 bp of equity to avoid fee thrashing.
   const minDeltaQuote = equity * 1e-4;
-  if (Math.abs(delta * close) < minDeltaQuote) return trades;
-
-  if (delta > 0) {
-    const trade = buy(state, delta, index, timestamp, close, state.position === 0 ? 'open' : 'open');
-    if (trade) trades.push(trade);
-  } else {
-    const trade = sell(state, -delta, index, timestamp, close, 'close');
-    if (trade) trades.push(trade);
+  if (Math.abs(delta * close) >= minDeltaQuote) {
+    if (delta > 0) {
+      const trade = buy(state, delta, index, timestamp, close, state.position === 0 ? 'open' : 'open');
+      if (trade) trades.push(trade);
+    } else {
+      const trade = sell(state, -delta, index, timestamp, close, 'close');
+      if (trade) trades.push(trade);
+    }
   }
+
+  // Refresh active SL/TP from the action. `0` / `undefined` clears.
+  state.stopLoss = action.stopLoss && action.stopLoss > 0 ? action.stopLoss : 0;
+  state.takeProfit = action.takeProfit && action.takeProfit > 0 ? action.takeProfit : 0;
   return trades;
 }
 
@@ -86,7 +131,7 @@ function buy(
   let filledSize = size;
 
   // Cap by available cash net of fees.
-  const feeRate = state.feeBps / 10_000;
+  const feeRate = state.takerRate;
   const maxNotional = state.cash / (1 + feeRate);
   if (cost > maxNotional) {
     cost = maxNotional;
@@ -96,8 +141,16 @@ function buy(
 
   const fee = cost * feeRate;
   state.cash -= cost + fee;
-  state.position += filledSize;
-  return { index, timestamp, side: 'buy', price: fillPrice, size: filledSize, fee, reason };
+
+  // Update running entry price for the now-larger position.
+  const prevAbs = state.position;
+  const newAbs = prevAbs + filledSize;
+  state.entryPrice = newAbs === 0
+    ? 0
+    : (state.entryPrice * prevAbs + fillPrice * filledSize) / newAbs;
+  state.position = newAbs;
+
+  return { index, timestamp, side: 'buy', price: fillPrice, size: filledSize, fee, reason, realizedPnl: 0 };
 }
 
 function sell(
@@ -112,10 +165,21 @@ function sell(
   const filled = Math.min(size, state.position);
   const fillPrice = close * (1 - state.slippageBps / 10_000);
   const proceeds = filled * fillPrice;
-  const fee = proceeds * (state.feeBps / 10_000);
+  const fee = proceeds * state.takerRate;
+  const realizedGross = filled * (fillPrice - state.entryPrice);
   state.cash += proceeds - fee;
   state.position -= filled;
-  return { index, timestamp, side: 'sell', price: fillPrice, size: filled, fee, reason };
+  if (state.position === 0) state.entryPrice = 0;
+  return {
+    index,
+    timestamp,
+    side: 'sell',
+    price: fillPrice,
+    size: filled,
+    fee,
+    reason,
+    realizedPnl: realizedGross - fee,
+  };
 }
 
 function sellAll(
@@ -140,3 +204,6 @@ function clampUnit(n: number): number {
   if (n > 1) return 1;
   return n;
 }
+
+// Re-export sltp helper so the engine can call through `portfolio.*`.
+export { checkIntraBar };

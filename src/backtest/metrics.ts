@@ -1,8 +1,14 @@
 // Aggregate metrics. Inputs are deterministic (equity curve, trades) so outputs
 // are too. All values that go on-chain are rounded to integers (basis points or
 // scaled multiples).
+//
+// Math reference: see FORMULAS.md §6.
+//   Sharpe:       https://en.wikipedia.org/wiki/Sharpe_ratio
+//   Sortino:      https://en.wikipedia.org/wiki/Sortino_ratio
+//   Drawdown:     https://en.wikipedia.org/wiki/Drawdown_(economics)
+//   Profit Factor: standard quant metric (Σ wins / Σ |losses|)
 
-import type { Metrics, Trade } from '../types.js';
+import type { Metrics, Trade, TradeReason } from '../types.js';
 
 export interface MetricsInput {
   initialBalance: number;
@@ -13,6 +19,18 @@ export interface MetricsInput {
   barsPerYear: number;
 }
 
+/** Reasons that mark the *closing leg* of a position. */
+const CLOSE_REASONS: ReadonlySet<TradeReason> = new Set([
+  'close',
+  'flip',
+  'liquidation',
+  'stop_loss',
+  'take_profit',
+]);
+
+/** Profit factor cap (×1000). 100× = 100_000 — anything higher is reported as the cap. */
+const PF_CAP_X1000 = 100_000;
+
 export function computeMetrics(input: MetricsInput): Metrics {
   const { initialBalance, equityCurve, trades, barsPerYear } = input;
   const n = equityCurve.length;
@@ -21,14 +39,16 @@ export function computeMetrics(input: MetricsInput): Metrics {
   const totalReturn = (finalEquity - initialBalance) / initialBalance;
   const totalReturnBps = Math.round(totalReturn * 10_000);
 
-  const sharpeX1000 = annualizedSharpeX1000(equityCurve, barsPerYear);
+  const { sharpeX1000, sortinoX1000 } = annualizedRiskRatios(equityCurve, barsPerYear);
   const maxDrawdownBps = Math.round(maxDrawdown(equityCurve) * 10_000);
-  const winRateBps = Math.round(winRate(trades) * 10_000);
+  const { winRateBps, profitFactorX1000 } = closeStats(trades);
 
   return {
     totalReturnBps,
     sharpeX1000,
+    sortinoX1000,
     maxDrawdownBps,
+    profitFactorX1000,
     winRateBps,
     numTrades: trades.length,
     finalEquity,
@@ -36,19 +56,26 @@ export function computeMetrics(input: MetricsInput): Metrics {
 }
 
 /**
- * Annualized Sharpe (rf=0). Returns Sharpe × 1000, rounded — matches the
- * `sharpeX1000` field on `AgentCertificate.Certificate`.
+ * Annualized Sharpe and Sortino in a single pass over the equity curve.
+ *
+ *   r_t      = ln(equity_t / equity_{t-1})
+ *   sharpe   = (mean(r) / std(r))               × sqrt(barsPerYear)
+ *   sortino  = (mean(r) / downsideStd(r))       × sqrt(barsPerYear)
+ *
+ * Both use rf = 0 / target = 0 in v0.1. See FORMULAS.md §6.2 / §6.3.
  */
-function annualizedSharpeX1000(equity: number[], barsPerYear: number): number {
+function annualizedRiskRatios(
+  equity: number[],
+  barsPerYear: number,
+): { sharpeX1000: number; sortinoX1000: number } {
   const n = equity.length;
-  if (n < 2) return 0;
+  if (n < 2) return { sharpeX1000: 0, sortinoX1000: 0 };
 
-  // Per-bar log returns. Skip if equity ever goes non-positive (would yield NaN).
   const returns: number[] = new Array(n - 1);
   for (let i = 1; i < n; i++) {
     const prev = equity[i - 1] as number;
     const curr = equity[i] as number;
-    if (prev <= 0 || curr <= 0) return 0;
+    if (prev <= 0 || curr <= 0) return { sharpeX1000: 0, sortinoX1000: 0 };
     returns[i - 1] = Math.log(curr / prev);
   }
 
@@ -57,17 +84,20 @@ function annualizedSharpeX1000(equity: number[], barsPerYear: number): number {
   const mean = sum / returns.length;
 
   let sqSum = 0;
+  let downSqSum = 0;
   for (let i = 0; i < returns.length; i++) {
-    const d = (returns[i] as number) - mean;
+    const r = returns[i] as number;
+    const d = r - mean;
     sqSum += d * d;
+    if (r < 0) downSqSum += r * r; // target = 0
   }
-  const variance = sqSum / returns.length;
-  const std = Math.sqrt(variance);
-  if (std === 0) return 0;
+  const std = Math.sqrt(sqSum / returns.length);
+  const downStd = Math.sqrt(downSqSum / returns.length);
+  const ann = Math.sqrt(barsPerYear);
 
-  const sharpe = (mean / std) * Math.sqrt(barsPerYear);
-  // Clamp to int64 range and to keep contract uint128 safe (well within bounds).
-  return Math.round(sharpe * 1000);
+  const sharpeX1000 = std === 0 ? 0 : Math.round((mean / std) * ann * 1000);
+  const sortinoX1000 = downStd === 0 ? 0 : Math.round((mean / downStd) * ann * 1000);
+  return { sharpeX1000, sortinoX1000 };
 }
 
 function maxDrawdown(equity: number[]): number {
@@ -86,49 +116,38 @@ function maxDrawdown(equity: number[]): number {
 }
 
 /**
- * Fraction of *closed/liquidated* trades that exited at a price favorable to the
- * direction implied by the prior position. Open / flip-open legs are excluded.
- *
- * For a fully realistic per-position win/loss we'd pair trades; this is the
- * conservative "exit-side win rate" — same number on every reproducer because
- * the trade list is deterministic.
+ * Win rate + profit factor over closing legs (`close`, `flip`, `liquidation`,
+ * `stop_loss`, `take_profit`). Each closing leg carries `realizedPnl` net of
+ * its own fee — the entry-leg fee is already absorbed into cash before the
+ * close runs, so summing realizedPnl over closes gives the position-level PnL.
  */
-function winRate(trades: Trade[]): number {
-  if (trades.length === 0) return 0;
-  let exits = 0;
+function closeStats(trades: Trade[]): { winRateBps: number; profitFactorX1000: number } {
+  let closes = 0;
   let wins = 0;
-  let lastEntry: { price: number; side: 'buy' | 'sell' } | null = null;
-
+  let grossProfit = 0;
+  let grossLoss = 0;
   for (let i = 0; i < trades.length; i++) {
     const t = trades[i] as Trade;
-    if (t.reason === 'open') {
-      lastEntry = { price: t.price, side: t.side };
-      continue;
-    }
-    if (t.reason === 'close' || t.reason === 'liquidation') {
-      exits++;
-      if (lastEntry !== null) {
-        const wonLong = lastEntry.side === 'buy' && t.price > lastEntry.price;
-        const wonShort = lastEntry.side === 'sell' && t.price < lastEntry.price;
-        if (wonLong || wonShort) wins++;
-      }
-      lastEntry = null;
-      continue;
-    }
-    if (t.reason === 'flip') {
-      // Flip = close-leg followed by open-leg in the trade list. The first flip
-      // trade is the close-leg, the second is the new open.
-      if (lastEntry !== null) {
-        exits++;
-        const wonLong = lastEntry.side === 'buy' && t.price > lastEntry.price;
-        const wonShort = lastEntry.side === 'sell' && t.price < lastEntry.price;
-        if (wonLong || wonShort) wins++;
-        lastEntry = null;
-      } else {
-        lastEntry = { price: t.price, side: t.side };
-      }
+    if (!CLOSE_REASONS.has(t.reason)) continue;
+    closes++;
+    const pnl = t.realizedPnl;
+    if (pnl > 0) {
+      wins++;
+      grossProfit += pnl;
+    } else if (pnl < 0) {
+      grossLoss += -pnl;
     }
   }
 
-  return exits === 0 ? 0 : wins / exits;
+  const winRateBps = closes === 0 ? 0 : Math.round((wins / closes) * 10_000);
+
+  let profitFactorX1000: number;
+  if (grossLoss === 0) {
+    profitFactorX1000 = grossProfit > 0 ? PF_CAP_X1000 : 0;
+  } else {
+    const pf = grossProfit / grossLoss;
+    profitFactorX1000 = Math.min(PF_CAP_X1000, Math.round(pf * 1000));
+  }
+
+  return { winRateBps, profitFactorX1000 };
 }

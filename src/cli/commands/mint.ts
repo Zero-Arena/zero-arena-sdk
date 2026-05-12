@@ -33,7 +33,10 @@ export const mintCommand = new Command('mint')
       // The mint flow doesn't depend on metrics — it only needs identity hashes
       // — so we pass through zeros. The on-chain threshold check uses the
       // certId, which the contract dereferences itself.
-      metrics: { totalReturnBps: 0, sharpeX1000: 0, maxDrawdownBps: 0, winRateBps: 0, numTrades: 0, finalEquity: 0 },
+      metrics: {
+        totalReturnBps: 0, sharpeX1000: 0, sortinoX1000: 0, maxDrawdownBps: 0,
+        profitFactorX1000: 0, winRateBps: 0, numTrades: 0, finalEquity: 0,
+      },
       txHash: '0x',
     };
 

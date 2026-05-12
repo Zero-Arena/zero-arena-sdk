@@ -59,15 +59,30 @@ export function hashAgent(agent: Agent): string {
  * Hash the user-facing options. We deliberately omit `initialBalance` from
  * `agentHash`-style identity (it lives on the cert) — but we DO include it here
  * because the trade list is a function of the starting capital.
+ *
+ * The hashed shape uses *resolved* values (after defaults) so that two callers
+ * who omit a field vs. pass its default produce the same `optionsHash`. Maker
+ * fee is included even though v0.1 always fills as taker — v0.2 limit-order
+ * support will use it, and adding it later would silently change every cert's
+ * runHash retroactively.
  */
 export function hashOptions(opts: BacktestOptions): string {
+  // Mirror the resolution rules in fees.ts. Kept inline (not imported) to avoid
+  // a hashing → backtest module cycle.
+  const isPerp = opts.market === 'perp';
+  const defMaker = isPerp ? 2 : 10;
+  const defTaker = isPerp ? 5 : 10;
+  const takerFeeBps = opts.takerFeeBps ?? opts.feeBps ?? defTaker;
+  const makerFeeBps = opts.makerFeeBps ?? defMaker;
   return hashJson({
     initialBalance: opts.initialBalance,
     market: opts.market,
     leverage: opts.leverage ?? 1,
-    feeBps: opts.feeBps ?? 10,
+    makerFeeBps,
+    takerFeeBps,
     slippageBps: opts.slippageBps ?? 5,
     liquidationMarginBps: opts.liquidationMarginBps ?? 500,
+    maintenanceAmount: opts.maintenanceAmount ?? 0,
   });
 }
 
@@ -77,6 +92,7 @@ export function hashTrades(trades: readonly Trade[]): string {
     fee: t.fee,
     index: t.index,
     price: t.price,
+    realizedPnl: t.realizedPnl,
     reason: t.reason,
     side: t.side,
     size: t.size,
