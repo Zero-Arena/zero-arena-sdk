@@ -45,13 +45,13 @@ The full demo flow lives in [`zero-arena-example-agent/01-rsi-agent-btc-spot`](.
 npx zeroarena --help
 
 # Upload a canonical OHLCV CSV to 0G Storage
-npx zeroarena dataset upload ./btc-usdt-1h.csv
+npx zeroarena dataset upload ./btcusdt-15m.csv
 
 # Run a backtest end-to-end (agent module is dynamic-imported)
-npx zeroarena backtest --agent ./agent.ts --csv ./btc-usdt-1h.csv --balance 10000
+npx zeroarena backtest --agent ./agent.ts --csv ./btcusdt-15m.csv --balance 10000
 
 # Certify a result on-chain
-npx zeroarena certify --agent ./agent.ts --csv ./btc-usdt-1h.csv
+npx zeroarena certify --agent ./agent.ts --csv ./btcusdt-15m.csv
 
 # Mint a passing certificate as an iNFT
 npx zeroarena mint --agent ./agent.ts --cert 1 --name 'RSI v1' \
@@ -59,6 +59,28 @@ npx zeroarena mint --agent ./agent.ts --cert 1 --name 'RSI v1' \
 ```
 
 Configuration is read from `.env` — copy [`.env.example`](./.env.example) to start.
+The default canonical dataset is **BTC/USDT 15-minute spot** candles, maintained by the [`zero-arena-bacend`](https://github.com/Zero-Arena/zero-arena-bacend) service.
+
+## Transferring an iNFT
+
+`transferAgent()` is the only call that needs an oracle. The SDK never holds the oracle's private key — you point it at a running [`zero-arena-bacend`](../zero-arena-bacend/) `oracle:serve` instance via `HttpOracleClient`:
+
+```ts
+import { ZeroArena, HttpOracleClient } from 'zeroarena';
+
+const za = new ZeroArena({
+  rpc, indexer, privateKey,
+  addresses: { ... },
+  oracle: new HttpOracleClient({
+    url: 'https://oracle.example.com',
+    headers: { authorization: 'Bearer <token>' }, // optional bearer gate
+  }),
+});
+
+await za.transferAgent({ tokenId, to, recipientPubKey });
+```
+
+If you operate the oracle yourself and accept the trusted-stub model, swap in `LocalOracleClient({ privateKey })` at construction — explicit, dev-only, and never auto-loaded from `.env`.
 
 ## What the SDK gives you
 
@@ -77,13 +99,13 @@ The certificate is tagged with the tier under which it shipped. v0.1 ships **T1 
 - **T2 — Reproducibility.** Owner can authorize a verifier with the encrypted agent + key; verifier reruns and asserts the same `runHash`.
 - **T3 — TEE attestation** *(v0.2)*. `BacktestEngine` + the developer's agent run inside a 0G Compute enclave (Intel TDX + NVIDIA H100/H200) used purely as a confidential-compute substrate. Trustless verification by anyone, agent code never revealed.
 
-The `Certificate` struct already reserves `trustTier` and `attestationHash` slots so v0.2 is wiring, not redesign. Full trust-model table lives in [`CLAUDE.md` §3](../CLAUDE.md).
+The `Certificate` struct already reserves `trustTier` and `attestationHash` slots so v0.2 is wiring, not redesign. Full trust-model table lives in [`CLAUDE.md` 3](../CLAUDE.md).
 
 **The SDK is model-agnostic.** Whatever you put inside `decide()` — a rule, an LLM call, a self-hosted model, an RL policy — is your choice. We don't bundle, recommend, or depend on any model.
 
 ## Public API
 
-Locked down per [`CLAUDE.md` §7](../CLAUDE.md). The shapes you can rely on:
+Locked down per [`CLAUDE.md` 7](../CLAUDE.md). The shapes you can rely on:
 
 ```ts
 class ZeroArena {
@@ -112,7 +134,7 @@ The whole verifiability story collapses if backtests aren't reproducible. The SD
 4. `runHash = keccak256(agentHash || datasetHash || optionsHash || tradesHash)`, with stable JSON for each component.
 5. CI runs the same agent + dataset 10 times and asserts every `runHash` matches.
 
-Agents that call out to non-deterministic sources (e.g., LLM APIs) are still cryptographically committed via `runHash` — but the certificate is honest about T2 only. T3 (TEE) lifts this; see [`CLAUDE.md` §14](../CLAUDE.md).
+Agents that call out to non-deterministic sources (e.g., LLM APIs) are still cryptographically committed via `runHash` — but the certificate is honest about T2 only. T3 (TEE) lifts this; see [`CLAUDE.md` 14](../CLAUDE.md).
 
 ## Cross-repo coupling
 
