@@ -36,6 +36,11 @@ export {
   StreamingIndicators,
   type StreamingObservation,
 } from './backtest/streaming-indicators.js';
+
+// Re-export the small subset of ethers primitives that downstream consumers
+// (e.g. zero-arena-bacend's paper-engine daemon) need. Avoids forcing every
+// consumer to add ethers as a direct dependency just to keccak a buffer.
+export { keccak256, toUtf8Bytes } from 'ethers';
 export {
   composeRunHash,
   hashAgent,
