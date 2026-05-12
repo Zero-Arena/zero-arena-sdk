@@ -66,6 +66,6 @@ function required(name: string, fallback?: string): string {
   if (v && v.length > 0) return v;
   if (fallback !== undefined) return fallback;
   throw new Error(
-    `${name} is required (set it in .env or your shell). See sdk/.env.example for the full list.`,
+    `${name} is required (set it in .env or your shell).`,
   );
 }
