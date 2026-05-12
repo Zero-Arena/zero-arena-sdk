@@ -15,6 +15,7 @@ import { Command } from 'commander';
 import { backtestCommand } from './commands/backtest.js';
 import { certifyCommand } from './commands/certify.js';
 import { datasetCommand } from './commands/dataset.js';
+import { initCommand } from './commands/init.js';
 import { mintCommand } from './commands/mint.js';
 
 const require = createRequire(import.meta.url);
@@ -26,6 +27,7 @@ program
   .description('Verifiable AI trading agents on 0G — backtest, certify, mint')
   .version(version);
 
+program.addCommand(initCommand);
 program.addCommand(datasetCommand);
 program.addCommand(backtestCommand);
 program.addCommand(certifyCommand);
