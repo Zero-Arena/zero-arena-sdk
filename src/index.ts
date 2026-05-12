@@ -1,4 +1,4 @@
-// Public surface — see CLAUDE.md §7. Locked down on day 1; do not break.
+// Public surface — see CLAUDE.md 7. Locked down on day 1; do not break.
 
 export { ZeroArena } from './ZeroArena.js';
 export { Agent } from './agent/Agent.js';
@@ -23,6 +23,14 @@ export type {
   TrustTier,
   ZeroArenaConfig,
 } from './types.js';
+
+// Oracle abstraction — the SDK NEVER holds the oracle private key itself.
+// Consumers explicitly construct a client (Http for production, Local for
+// dev/demo operators) and pass it via `ZeroArenaConfig.oracle`.
+export type { OracleClient, TransferProofRequest } from './inft/OracleClient.js';
+export { oracleDigest } from './inft/OracleClient.js';
+export { HttpOracleClient, type HttpOracleClientConfig } from './inft/HttpOracleClient.js';
+export { LocalOracleClient, type LocalOracleClientConfig } from './inft/LocalOracleClient.js';
 
 // Lower-level primitives — exported so example scripts and the CLI can use them
 // directly without going through the full ZeroArena facade.
