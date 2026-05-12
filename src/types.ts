@@ -1,4 +1,4 @@
-// Public types — locked down per CLAUDE.md §7. Breaking changes here are breaking
+// Public types — locked down per CLAUDE.md 7. Breaking changes here are breaking
 // changes for every downstream consumer.
 
 /** Trade side. Spot is long-only in v0.1; perp supports both. */
@@ -10,7 +10,7 @@ export type Direction = -1 | 0 | 1;
 /** Market type. Determines portfolio math. */
 export type Market = 'spot' | 'perp';
 
-/** Trust tier the certificate was issued under — see CLAUDE.md §3. */
+/** Trust tier the certificate was issued under — see CLAUDE.md 3. */
 export type TrustTier = 'T1' | 'T2' | 'T3';
 
 /** Reason a trade was emitted. Used for analytics + run-log forensics. */
@@ -107,7 +107,7 @@ export interface Action {
   size: number;
   /**
    * Optional protective stop-loss in quote price. The engine checks this
-   * intra-bar (TradingView convention — see FORMULAS.md §5) on the bar AFTER
+   * intra-bar (TradingView convention — see FORMULAS.md 5) on the bar AFTER
    * the action is applied. Pass `0` or omit to clear.
    */
   stopLoss?: number;
@@ -182,15 +182,15 @@ export interface Trade {
 export interface Metrics {
   /** Total return in basis points (signed). +500 = +5%. */
   totalReturnBps: number;
-  /** Annualized Sharpe ratio × 1000, rounded. See FORMULAS.md §6.2. */
+  /** Annualized Sharpe ratio × 1000, rounded. See FORMULAS.md 6.2. */
   sharpeX1000: number;
-  /** Annualized Sortino ratio × 1000, rounded. See FORMULAS.md §6.3. */
+  /** Annualized Sortino ratio × 1000, rounded. See FORMULAS.md 6.3. */
   sortinoX1000: number;
   /** Maximum peak-to-trough drawdown in basis points (unsigned). */
   maxDrawdownBps: number;
   /**
    * Profit factor × 1000, rounded. Capped at 100_000 (= 100×) when there are no
-   * losing trades. 0 when there are no winning trades. See FORMULAS.md §6.5.
+   * losing trades. 0 when there are no winning trades. See FORMULAS.md 6.5.
    */
   profitFactorX1000: number;
   /** Win rate of closed positions, in basis points. */
@@ -260,7 +260,7 @@ export interface ZeroArenaConfig {
   rpc: string;
   /** 0G Storage indexer URL. */
   indexer: string;
-  /** Signer private key (hex). */
+  /** YOUR signer private key (hex). Pays gas for uploadDataset, certify, mintAgent. Never anyone else's key. */
   privateKey: string;
   /** Optional contract address overrides; otherwise read from @zero-arena/contracts. */
   addresses?: {
@@ -269,12 +269,13 @@ export interface ZeroArenaConfig {
     ReencryptionOracle?: string;
   };
   /**
-   * Oracle service private key. Required only for `transferAgent`. In v0.1
-   * the off-chain oracle is a trusted-signer stub (CLAUDE.md §3, §8); whoever
-   * runs the demo holds the same private key the on-chain ReencryptionOracle
-   * was deployed with. v0.2 swaps this for a TEE-attested service.
+   * Required only if you call `transferAgent`. Construct an `HttpOracleClient`
+   * pointing at a deployed oracle service (see zero-arena-bacend's
+   * `oracle:serve`), or — if you ARE the oracle's operator and accept the
+   * trusted-stub model — a `LocalOracleClient`. The SDK never auto-loads
+   * an oracle private key from environment variables.
    */
-  oraclePrivateKey?: string;
+  oracle?: import('./inft/OracleClient.js').OracleClient;
   /** Override where AES keys are persisted. Defaults to `~/.zeroarena/keys`. */
   keysDir?: string;
 }

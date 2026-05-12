@@ -31,10 +31,17 @@ export interface ResolvedConfig {
     ZeroArenaINFT: string;
     ReencryptionOracle: string;
   };
-  oraclePrivateKey?: string;
   keysDir?: string;
 }
 
+/**
+ * Build the SDK config from environment variables.
+ *
+ * Note: this loader intentionally does NOT read any oracle private key. The
+ * oracle is a service the SDK calls; configure `ZeroArenaConfig.oracle` at
+ * the call site with an `HttpOracleClient` (pointing at a deployed oracle
+ * service) or a `LocalOracleClient` if you operate the oracle yourself.
+ */
 export function configFromEnv(): ResolvedConfig {
   const rpc = required('ZA_RPC', 'https://evmrpc-testnet.0g.ai');
   const indexer = required('ZA_INDEXER', 'https://indexer-storage-testnet-turbo.0g.ai');
@@ -50,7 +57,6 @@ export function configFromEnv(): ResolvedConfig {
       ReencryptionOracle: required('ZA_ADDR_ORACLE'),
     },
   };
-  if (process.env.ORACLE_PRIVATE_KEY) cfg.oraclePrivateKey = process.env.ORACLE_PRIVATE_KEY;
   if (process.env.ZA_KEYS_DIR) cfg.keysDir = process.env.ZA_KEYS_DIR;
   return cfg;
 }

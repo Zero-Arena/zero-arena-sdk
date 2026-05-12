@@ -1,5 +1,5 @@
 // Public facade for the SDK. Composes the storage / chain / iNFT adapters
-// behind the API documented in CLAUDE.md §7.
+// behind the API documented in CLAUDE.md 7.
 
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -76,7 +76,7 @@ export class ZeroArena {
     const trustTier: TrustTier = opts.trustTier ?? 'T2';
     if (trustTier === 'T3' && !opts.attestationHash) {
       throw new Error(
-        'certify: trustTier T3 requires an attestationHash. v0.1 only supports T1 + T2 — see CLAUDE.md §3.',
+        'certify: trustTier T3 requires an attestationHash. v0.1 only supports T1 + T2 — see CLAUDE.md 3.',
       );
     }
 
@@ -123,14 +123,17 @@ export class ZeroArena {
     to: string;
     recipientPubKey: string;
   }): Promise<TransferResult> {
-    if (!this.config.oraclePrivateKey) {
+    if (!this.config.oracle) {
       throw new Error(
-        'transferAgent: ZeroArenaConfig.oraclePrivateKey is required. In v0.1 the off-chain oracle is a trusted-signer stub run by the demo operator.',
+        'transferAgent: ZeroArenaConfig.oracle is required. Construct an HttpOracleClient ' +
+          "pointing at a deployed oracle service (see zero-arena-bacend's `oracle:serve`), " +
+          'or a LocalOracleClient if you operate the oracle. The SDK never holds an ' +
+          'oracle private key.',
       );
     }
     const keysDir = this.config.keysDir ?? join(homedir(), '.zeroarena', 'keys');
     const transfer = new TransferAdapter(this.storage, this.chain, {
-      oraclePrivateKey: this.config.oraclePrivateKey,
+      oracle: this.config.oracle,
       currentKeyPath: join(keysDir, `agent-${opts.tokenId.toString()}.key`),
     });
     const from = await this.chain.signerAddress();
@@ -150,7 +153,7 @@ function resolveAddresses(cfg: ZeroArenaConfig): ChainAddresses {
   if (!a.AgentCertificate || !a.ZeroArenaINFT || !a.ReencryptionOracle) {
     throw new Error(
       'ZeroArenaConfig.addresses must include AgentCertificate, ZeroArenaINFT, and ReencryptionOracle. ' +
-        'After deploying the contracts, copy them from contracts/deployments/galileo-testnet.json.',
+      'After deploying the contracts, copy them from contracts/deployments/galileo-testnet.json.',
     );
   }
   return {
