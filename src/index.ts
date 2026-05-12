@@ -24,16 +24,11 @@ export type {
   ZeroArenaConfig,
 } from './types.js';
 
-// Oracle abstraction — the SDK NEVER holds the oracle private key itself.
-// Consumers explicitly construct a client (Http for production, Local for
-// dev/demo operators) and pass it via `ZeroArenaConfig.oracle`.
 export type { OracleClient, TransferProofRequest } from './inft/OracleClient.js';
 export { oracleDigest } from './inft/OracleClient.js';
 export { HttpOracleClient, type HttpOracleClientConfig } from './inft/HttpOracleClient.js';
 export { LocalOracleClient, type LocalOracleClientConfig } from './inft/LocalOracleClient.js';
 
-// Lower-level primitives — exported so example scripts and the CLI can use them
-// directly without going through the full ZeroArena facade.
 export { runBacktest, WARMUP } from './backtest/BacktestEngine.js';
 export {
   composeRunHash,
@@ -45,3 +40,9 @@ export {
 } from './backtest/hash.js';
 export { ema, macd, rsi } from './backtest/indicators.js';
 export { computeMetrics } from './backtest/metrics.js';
+
+import { StorageAdapter as _StorageAdapterImpl } from './storage/StorageAdapter.js';
+export const parseDatasetFile = _StorageAdapterImpl.parseDatasetFile.bind(_StorageAdapterImpl);
+export { StorageAdapter } from './storage/StorageAdapter.js';
+
+export { loadEnv, configFromEnv, type ResolvedConfig } from './cli/env.js';
