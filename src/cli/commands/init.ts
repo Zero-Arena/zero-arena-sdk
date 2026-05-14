@@ -9,9 +9,9 @@ import { computeAddress, Wallet } from 'ethers';
 const GALILEO = {
   rpc: 'https://evmrpc-testnet.0g.ai',
   indexer: 'https://indexer-storage-testnet-turbo.0g.ai',
-  cert: '0x21a5DEA59cfA07B261d389A9554477e137805c2f',
-  inft: '0x4Bd4d45f206861aa7cD4421785a316A1dD06036f',
-  oracle: '0x63909dA30b0d65ad72b32b3C8C82515f7BFA6Fd6',
+  cert: '0x77f29d2a7BcAC679812d9a0FB1c7508eDA6B087e',
+  inft: '0xF7162ecbdB11DE4704043D4aF93B4030AD61700e',
+  oracle: '0x733667CEBB27e310a8fb60799Af73A8C1fe501b2',
 };
 
 export const initCommand = new Command('init')
