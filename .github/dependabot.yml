@@ -1,0 +1,33 @@
+# Dependabot config. Auto-PRs for outdated npm + GitHub Actions deps.
+# Minor/patch updates are grouped into one weekly PR; majors get their own
+# so we can review the breaking changes individually.
+
+version: 2
+
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # Major bumps land via dedicated PRs (handled outside the group).
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    labels:
+      - "dependencies"
+      - "github-actions"
