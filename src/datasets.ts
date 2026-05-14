@@ -1,5 +1,11 @@
 // Canonical Galileo dataset pointers. Bumped per SDK patch release whenever
 // the workspace operator re-uploads via `bacend dataset upload`.
+//
+// v0.2 scope: only BTC/USDT 15m spot is anchored. 0G/USDT spot and BTC/USDT
+// perpetuals are deferred — 0G Storage finalization for ~1MB+ uploads hangs
+// on the Galileo testnet, and `fapi.binance.com` is geo-blocked from the
+// workspace operator's network. Both come back when the storage testnet
+// stabilizes or perp ingest moves to a non-blocked endpoint.
 
 export interface CanonicalDataset {
   rootHash: string;
