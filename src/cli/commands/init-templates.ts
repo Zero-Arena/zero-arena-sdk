@@ -12,7 +12,7 @@ export interface Generated {
   readmeNote: string;
 }
 
-const ZEROARENA_DEP_VERSION = '^0.1.4';
+const ZEROARENA_DEP_VERSION = '^0.2.0';
 
 // ─── rule-based: RSI ──────────────────────────────────────────────────────
 
