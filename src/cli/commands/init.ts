@@ -4,7 +4,26 @@ import { execSync } from 'node:child_process';
 import { createInterface } from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { Command } from 'commander';
-import { computeAddress, Wallet } from 'ethers';
+import { computeAddress } from 'ethers';
+import {
+  customAgent,
+  emaAgent,
+  envFile,
+  gitignore,
+  llmAnthropic,
+  llmClaudeCode,
+  llmGemini,
+  llmOpenAI,
+  macdAgent,
+  pkgJson,
+  readme,
+  rsiAgent,
+  runTs,
+  tsconfigJson,
+  type Generated,
+  type LlmProvider,
+  type Market,
+} from './init-templates.js';
 
 const GALILEO = {
   rpc: 'https://evmrpc-testnet.0g.ai',
@@ -14,24 +33,44 @@ const GALILEO = {
   oracle: '0x733667CEBB27e310a8fb60799Af73A8C1fe501b2',
 };
 
+type StrategyKey = 'rsi' | 'macd' | 'ema' | 'llm' | 'custom';
+
+const STRATEGIES: Array<{ key: StrategyKey; label: string; defaultMarket: Market; agentName: string }> = [
+  { key: 'rsi',    label: 'RSI mean reversion',        defaultMarket: 'spot', agentName: 'RsiAgent' },
+  { key: 'macd',   label: 'MACD trend follower',       defaultMarket: 'spot', agentName: 'MacdAgent' },
+  { key: 'ema',    label: 'EMA(12/26) crossover',      defaultMarket: 'spot', agentName: 'EmaCrossoverAgent' },
+  { key: 'llm',    label: 'LLM-driven (any provider)', defaultMarket: 'spot', agentName: 'LlmAgent' },
+  { key: 'custom', label: 'Custom — empty scaffold',   defaultMarket: 'spot', agentName: 'CustomAgent' },
+];
+
+const LLM_PROVIDERS: Array<{ key: LlmProvider; label: string; defaultModel: string }> = [
+  { key: 'anthropic',   label: 'Anthropic Claude (API key)',      defaultModel: 'claude-sonnet-4-6' },
+  { key: 'openai',      label: 'OpenAI GPT (API key)',            defaultModel: 'gpt-4o-mini' },
+  { key: 'gemini',      label: 'Google Gemini (API key)',         defaultModel: 'gemini-2.0-flash' },
+  { key: 'claude-code', label: 'Local Claude Code CLI (no key)',  defaultModel: '' },
+];
+
 export const initCommand = new Command('init')
-  .description('Scaffold a new Zero Arena agent project')
+  .description('Scaffold a new Zero Arena agent project (interactive wizard)')
   .argument('[name]', 'project directory name')
-  .option('-t, --template <template>', 'template (rsi-spot)', 'rsi-spot')
   .option('--key <hex>', 'use this PRIVATE_KEY (skip prompt)')
   .option('--no-install', 'skip `npm install`')
   .action(async (nameArg: string | undefined, opts: InitOpts) => {
-    if (opts.template !== 'rsi-spot') {
-      throw new Error(`unknown template "${opts.template}". v0.1 ships: rsi-spot`);
-    }
-
-    const rl = createInterface({ input, output });
+    const rl = createInterface({ input, output, terminal: !!process.stdin.isTTY });
     try {
-      const name = nameArg ?? (await rl.question('Project name: ')).trim();
+      printBanner();
+
+      const name = nameArg ?? (await ask(rl, 'Project name', 'my-agent'));
       if (!name) throw new Error('project name required');
 
       const dir = resolve(process.cwd(), name);
       if (existsSync(dir)) throw new Error(`directory already exists: ${dir}`);
+
+      const strategy = await pickStrategy(rl);
+      const market = await pickMarket(rl, strategy.defaultMarket);
+      const perpParams = market === 'perp' ? await askPerpParams(rl) : { leverage: 1 };
+
+      const generated = await runStrategyWizard(rl, strategy.key);
 
       const privateKey = opts.key ?? (await promptKey(rl));
       if (privateKey && !/^0x[0-9a-fA-F]{64}$/.test(privateKey)) {
@@ -39,13 +78,24 @@ export const initCommand = new Command('init')
       }
 
       mkdirSync(dir, { recursive: true });
-      for (const [path, content] of files(name, privateKey)) {
+      const mintName = await ask(rl, 'iNFT name (shown on mint)', `${strategy.label} v1`);
+
+      for (const [path, content] of buildFiles({
+        name,
+        privateKey,
+        strategy: strategy.key,
+        agentName: strategy.agentName,
+        market,
+        leverage: perpParams.leverage,
+        generated,
+        mintName,
+      })) {
         writeFileSync(resolve(dir, path), content);
       }
 
       const shouldInstall =
         opts.install !== false &&
-        (await rl.question('Run `npm install` now? (Y/n) ')).trim().toLowerCase() !== 'n';
+        (await ask(rl, 'Run `npm install` now? (Y/n)', 'Y')).toLowerCase() !== 'n';
       rl.close();
 
       if (shouldInstall) {
@@ -53,44 +103,120 @@ export const initCommand = new Command('init')
         execSync('npm install', { cwd: dir, stdio: 'inherit' });
       }
 
-      const addr = privateKey ? computeAddress(privateKey) : null;
-      process.stdout.write(`\n✓ created ${name}/\n`);
-      if (addr) process.stdout.write(`  wallet:  ${addr}\n  faucet:  https://faucet.0g.ai\n`);
-      else process.stdout.write(`  ⚠ no PRIVATE_KEY set — edit .env before running\n`);
-      process.stdout.write(`\nNext:\n  cd ${name}\n  npm start\n`);
+      printSummary({ name, strategy: strategy.label, market, generated, privateKey, shouldInstall });
     } finally {
       rl.close();
     }
   });
 
 interface InitOpts {
-  template: string;
   key?: string;
   install?: boolean;
 }
 
+// ─── wizard helpers ───────────────────────────────────────────────────────
+
+function printBanner(): void {
+  process.stdout.write('\nZero Arena — agent scaffold\n');
+  process.stdout.write('────────────────────────────\n\n');
+}
+
+async function ask(rl: ReturnType<typeof createInterface>, prompt: string, fallback?: string): Promise<string> {
+  const tail = fallback !== undefined ? ` (${fallback})` : '';
+  const answer = (await rl.question(`? ${prompt}${tail}: `)).trim();
+  return answer === '' && fallback !== undefined ? fallback : answer;
+}
+
+async function pickFromMenu<T>(
+  rl: ReturnType<typeof createInterface>,
+  title: string,
+  choices: Array<{ label: string }>,
+  defaultIndex = 0,
+): Promise<number> {
+  process.stdout.write(`\n${title}\n`);
+  for (let i = 0; i < choices.length; i++) {
+    process.stdout.write(`  ${i + 1}) ${choices[i]!.label}\n`);
+  }
+  const raw = (await rl.question(`Choose [1-${choices.length}] (${defaultIndex + 1}): `)).trim();
+  const n = raw === '' ? defaultIndex + 1 : Number(raw);
+  if (!Number.isInteger(n) || n < 1 || n > choices.length) {
+    throw new Error(`invalid choice "${raw}"`);
+  }
+  return n - 1;
+}
+
+async function pickStrategy(rl: ReturnType<typeof createInterface>): Promise<(typeof STRATEGIES)[number]> {
+  const idx = await pickFromMenu(rl, 'Strategy template:', STRATEGIES);
+  return STRATEGIES[idx]!;
+}
+
+async function pickMarket(rl: ReturnType<typeof createInterface>, defaultMarket: Market): Promise<Market> {
+  const idx = await pickFromMenu(
+    rl,
+    'Market:',
+    [{ label: 'Spot (long-only, no leverage)' }, { label: 'Perpetual futures (leverage, funding, liquidation)' }],
+    defaultMarket === 'spot' ? 0 : 1,
+  );
+  return idx === 0 ? 'spot' : 'perp';
+}
+
+async function askPerpParams(rl: ReturnType<typeof createInterface>): Promise<{ leverage: number }> {
+  const leverage = clamp(Number(await ask(rl, 'Leverage (1-10)', '3')), 1, 10);
+  return { leverage };
+}
+
+async function runStrategyWizard(
+  rl: ReturnType<typeof createInterface>,
+  key: StrategyKey,
+): Promise<Generated> {
+  if (key === 'rsi') {
+    const oversold = clamp(Number(await ask(rl, 'RSI oversold threshold', '30')), 1, 99);
+    const overbought = clamp(Number(await ask(rl, 'RSI overbought threshold', '70')), 1, 99);
+    const sizeFraction = clamp(Number(await ask(rl, 'Position size as fraction of equity', '0.5')), 0.01, 1);
+    return rsiAgent({ oversold, overbought, sizeFraction });
+  }
+  if (key === 'macd') {
+    const sizeFraction = clamp(Number(await ask(rl, 'Position size as fraction of equity', '0.5')), 0.01, 1);
+    return macdAgent({ sizeFraction });
+  }
+  if (key === 'ema') {
+    const sizeFraction = clamp(Number(await ask(rl, 'Position size as fraction of equity', '0.5')), 0.01, 1);
+    return emaAgent({ sizeFraction });
+  }
+  if (key === 'custom') {
+    return customAgent();
+  }
+  // llm
+  const provIdx = await pickFromMenu(rl, 'LLM provider:', LLM_PROVIDERS);
+  const provider = LLM_PROVIDERS[provIdx]!;
+  const sizeFraction = clamp(Number(await ask(rl, 'Position size as fraction of equity', '0.5')), 0.01, 1);
+  if (provider.key === 'claude-code') {
+    return llmClaudeCode({ sizeFraction });
+  }
+  const model = await ask(rl, 'Model name', provider.defaultModel);
+  if (provider.key === 'anthropic') return llmAnthropic({ model, sizeFraction });
+  if (provider.key === 'openai') return llmOpenAI({ model, sizeFraction });
+  return llmGemini({ model, sizeFraction });
+}
+
 async function promptKey(rl: ReturnType<typeof createInterface>): Promise<string | undefined> {
   const hasCast = (() => {
-    try {
-      execSync('cast --version', { stdio: 'ignore' });
-      return true;
-    } catch {
-      return false;
-    }
+    try { execSync('cast --version', { stdio: 'ignore' }); return true; }
+    catch { return false; }
   })();
 
-  process.stdout.write('\nWallet setup:\n');
-  process.stdout.write('  1) Paste your own PRIVATE_KEY\n');
-  if (hasCast) process.stdout.write('  2) Generate a fresh wallet via `cast wallet new`\n');
-  process.stdout.write(`  ${hasCast ? '3' : '2'}) Skip — fill .env later\n`);
+  const choices = [
+    { label: 'Paste your own PRIVATE_KEY' },
+    ...(hasCast ? [{ label: 'Generate a fresh wallet via `cast wallet new`' }] : []),
+    { label: 'Skip — fill .env later' },
+  ];
+  const idx = await pickFromMenu(rl, 'Wallet setup:', choices, 0);
 
-  const choice = (await rl.question(`Choose [1-${hasCast ? '3' : '2'}]: `)).trim();
-
-  if (choice === '1') {
+  if (idx === 0) {
     const key = (await rl.question('PRIVATE_KEY (0x…): ')).trim();
-    return key;
+    return key || undefined;
   }
-  if (choice === '2' && hasCast) {
+  if (hasCast && idx === 1) {
     const raw = execSync('cast wallet new', { encoding: 'utf8' });
     const m = /Private key:\s*(0x[0-9a-fA-F]{64})/.exec(raw);
     if (!m) throw new Error('cast wallet new: could not parse output');
@@ -101,192 +227,61 @@ async function promptKey(rl: ReturnType<typeof createInterface>): Promise<string
   return undefined;
 }
 
-function files(name: string, privateKey: string | undefined): Array<[string, string]> {
-  const keyLine = privateKey ?? '0x';
+// ─── file generation ──────────────────────────────────────────────────────
+
+function buildFiles(p: {
+  name: string;
+  privateKey: string | undefined;
+  strategy: StrategyKey;
+  agentName: string;
+  market: Market;
+  leverage: number;
+  generated: Generated;
+  mintName: string;
+}): Array<[string, string]> {
+  const keyLine = p.privateKey ?? '0x';
+  const env = envFile({ keyLine, galileo: GALILEO, extraEnv: p.generated.extraEnv });
+  const envExample = envFile({ keyLine: '0x', galileo: GALILEO, extraEnv: p.generated.extraEnv });
   return [
-    ['package.json', pkg(name)],
-    ['tsconfig.json', tsconfig()],
+    ['package.json', pkgJson(p.name, p.generated.extraDeps)],
+    ['tsconfig.json', tsconfigJson()],
     ['.gitignore', gitignore()],
-    ['.env', envFile(keyLine)],
-    ['.env.example', envFile('0x')],
-    ['agent.ts', agentTs()],
-    ['run.ts', runTs()],
-    ['README.md', readme(name)],
+    ['.env', env],
+    ['.env.example', envExample],
+    ['agent.ts', p.generated.agentSource],
+    ['run.ts', runTs({
+      market: p.market,
+      initialBalance: 10_000,
+      leverage: p.leverage,
+      takerFeeBps: 10,
+      slippageBps: 5,
+      agentName: p.agentName,
+      mintName: p.mintName,
+    })],
+    ['README.md', readme(p.name, p.generated.readmeNote)],
   ];
 }
 
-function pkg(name: string): string {
-  return (
-    JSON.stringify(
-      {
-        name,
-        version: '0.0.1',
-        private: true,
-        type: 'module',
-        scripts: {
-          start: 'tsx run.ts',
-          backtest: 'tsx run.ts --backtest-only',
-        },
-        dependencies: {
-          zeroarena: '^0.1.1',
-        },
-        devDependencies: {
-          tsx: '^4.7.0',
-          typescript: '^5.5.0',
-        },
-      },
-      null,
-      2,
-    ) + '\n'
-  );
-}
-
-function tsconfig(): string {
-  return (
-    JSON.stringify(
-      {
-        compilerOptions: {
-          target: 'ES2022',
-          module: 'NodeNext',
-          moduleResolution: 'NodeNext',
-          strict: true,
-          esModuleInterop: true,
-          skipLibCheck: true,
-        },
-      },
-      null,
-      2,
-    ) + '\n'
-  );
-}
-
-function gitignore(): string {
-  return ['node_modules/', '.env', '*.log', '.zeroarena/', '*.key', ''].join('\n');
-}
-
-function envFile(keyLine: string): string {
-  return [
-    `ZA_RPC=${GALILEO.rpc}`,
-    `ZA_INDEXER=${GALILEO.indexer}`,
-    '',
-    '# Your wallet. Signs certify + mintAgent, pays gas, owns the iNFT.',
-    `PRIVATE_KEY=${keyLine}`,
-    '',
-    `ZA_ADDR_CERT=${GALILEO.cert}`,
-    `ZA_ADDR_INFT=${GALILEO.inft}`,
-    `ZA_ADDR_ORACLE=${GALILEO.oracle}`,
-    '',
-  ].join('\n');
-}
-
-function agentTs(): string {
-  return `import { Agent, type Action, type Observation } from 'zeroarena';
-
-export class RsiAgent extends Agent {
-  constructor(
-    public readonly oversold = 30,
-    public readonly overbought = 70,
-    public readonly sizeFraction = 0.5,
-  ) {
-    super();
+function printSummary(s: {
+  name: string;
+  strategy: string;
+  market: Market;
+  generated: Generated;
+  privateKey: string | undefined;
+  shouldInstall: boolean;
+}): void {
+  const addr = s.privateKey ? computeAddress(s.privateKey) : null;
+  process.stdout.write(`\n✓ created ${s.name}/\n`);
+  process.stdout.write(`  strategy: ${s.strategy} on ${s.market}\n`);
+  if (addr) process.stdout.write(`  wallet:   ${addr}\n  faucet:   https://faucet.0g.ai\n`);
+  else process.stdout.write(`  ⚠ no PRIVATE_KEY set — edit .env before running\n`);
+  if (s.generated.extraEnv.some((l) => l.endsWith('_API_KEY='))) {
+    process.stdout.write(`  ⚠ set the *_API_KEY value in .env, or the agent falls back to a deterministic heuristic\n`);
   }
-
-  override decide(obs: Observation): Action {
-    if (obs.rsi14 < this.oversold) return { direction: 1, size: this.sizeFraction };
-    if (obs.rsi14 > this.overbought) return { direction: 0, size: 0 };
-    return { direction: obs.position > 0 ? 1 : 0, size: obs.position > 0 ? this.sizeFraction : 0 };
-  }
-
-  override toJSON(): Record<string, unknown> {
-    return {
-      className: 'RsiAgent',
-      oversold: this.oversold,
-      overbought: this.overbought,
-      sizeFraction: this.sizeFraction,
-    };
-  }
+  process.stdout.write(`\nNext:\n  cd ${s.name}\n  ${s.shouldInstall ? '' : 'npm install\n  '}npm run backtest   # offline\n  npm start          # full pipeline (needs PRIVATE_KEY + Galileo gas)\n`);
 }
 
-export default RsiAgent;
-`;
-}
-
-function runTs(): string {
-  return `import { ZeroArena, CANONICAL_DATASETS, configFromEnv, loadEnv, type BacktestOptions } from 'zeroarena';
-import RsiAgent from './agent.js';
-
-// Pass --backtest-only to skip the chain calls (certify + mint). Useful for
-// first-run smoke checks before you fund the wallet in .env.
-const BACKTEST_ONLY = process.argv.includes('--backtest-only');
-
-const OPTS: BacktestOptions = {
-  initialBalance: 10_000,
-  market: 'spot',
-  feeBps: 10,
-  slippageBps: 5,
-};
-
-async function main() {
-  loadEnv();
-  const za = new ZeroArena(configFromEnv());
-
-  const { rootHash } = CANONICAL_DATASETS['BTCUSDT-15m-spot']!;
-  console.log(\`▸ loading dataset from 0G Storage…\`);
-  const dataset = await za.loadDataset({ rootHash });
-  console.log(\`  \${dataset.candles.length} candles\`);
-
-  const agent = new RsiAgent();
-  const result = await za.backtest(agent, dataset, OPTS);
-  console.log(\`\\n▸ backtest\\n  runHash: \${result.runHash}\\n  return:  \${result.metrics.totalReturnBps} bps\\n  sharpe:  \${result.metrics.sharpeX1000 / 1000}\`);
-
-  if (BACKTEST_ONLY) {
-    console.log(\`\\n✓ backtest-only complete. Run \\\`npm start\\\` to certify + mint on 0G Chain.\`);
-    return;
-  }
-
-  console.log(\`\\n▸ certifying on 0G Chain…\`);
-  const cert = await za.certify(result);
-  console.log(\`  certId: \${cert.certId}\\n  tx:     https://chainscan-galileo.0g.ai/tx/\${cert.txHash}\`);
-
-  console.log(\`\\n▸ minting iNFT…\`);
-  const inft = await za.mintAgent({ agent, certificate: cert, name: 'My RSI Agent v1' });
-  console.log(\`  tokenId: \${inft.tokenId}\\n  tx:      https://chainscan-galileo.0g.ai/tx/\${inft.txHash}\`);
-
-  console.log(\`\\n✓ done. Trust tier: T2.\`);
-}
-
-main().catch((err: unknown) => {
-  console.error(err instanceof Error ? err.stack ?? err.message : err);
-  process.exit(1);
-});
-`;
-}
-
-function readme(name: string): string {
-  return `# ${name}
-
-Zero Arena starter — RSI mean-reversion agent on BTC/USDT 15m spot.
-
-## Run
-
-\`\`\`bash
-npm install        # if you skipped it during init
-npm start          # backtest → certify → mint
-\`\`\`
-
-You'll see a \`runHash\`, a \`certId\` on \`AgentCertificate\`, and a \`tokenId\` on \`ZeroArenaINFT\`. Every value is linkable on <https://chainscan-galileo.0g.ai>.
-
-## Edit
-
-- \`agent.ts\` — your strategy. Anything in \`toJSON()\` becomes part of \`agentHash\`.
-- \`run.ts\` — the pipeline. Backtest options, dataset selection, mint name.
-
-Determinism rules: no \`Math.random()\`, no \`Date.now()\`, no \`for…in\` on objects. Same agent + same dataset → same \`runHash\`.
-
-## Trust tier
-
-Certificates are minted at **T2** — commitment on-chain + owner-authorized reproducibility. T3 (TEE attestation via 0G Compute) ships in v0.2 with no code change.
-
-The AES key for your encrypted run log is written to \`~/.zeroarena/keys/agent-<tokenId>.key\` — **keep it** so future verifiers can decrypt.
-`;
+function clamp(n: number, lo: number, hi: number): number {
+  if (!Number.isFinite(n)) throw new Error(`expected a number, got "${n}"`);
+  return Math.min(Math.max(n, lo), hi);
 }
