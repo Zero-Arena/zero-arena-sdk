@@ -10,7 +10,15 @@ cd my-agent
 npm start                # backtest → certify → mint, end-to-end
 ```
 
-The init flow asks how you want to set up your wallet (paste your own, generate one with `cast wallet new`, or fill `.env` later), then writes a minimal project: `agent.ts`, `run.ts`, `.env`, `package.json`. Galileo addresses are pre-pinned.
+The interactive wizard walks you through:
+
+- **Strategy template** — RSI mean reversion, MACD trend, EMA crossover, LLM-driven, or empty scaffold
+- **Market** — spot (long-only) or perpetual futures (leverage, funding, liquidation)
+- **LLM provider** (if picked) — Anthropic Claude API, OpenAI, Google Gemini, or local Claude Code CLI (no API key needed)
+- **Strategy parameters** — oversold/overbought thresholds, position size, leverage, etc.
+- **Wallet setup** — paste your key, generate one with `cast wallet new`, or fill `.env` later
+
+Galileo addresses are pre-pinned. The wizard writes `agent.ts`, `run.ts`, `.env`, `package.json`, and a per-template README.
 
 ## Or install manually
 
