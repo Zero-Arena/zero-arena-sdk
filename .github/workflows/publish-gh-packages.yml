@@ -1,0 +1,39 @@
+# Publish to GitHub Packages on every `sdk-v*` tag push.
+# Renames the package to @zero-arena/sdk for the GH Packages registry
+# (scoped names required there); npmjs.org keeps the bare `zeroarena` name
+# via the separate `npm publish` step run from a maintainer machine.
+
+name: Publish to GitHub Packages
+
+on:
+  push:
+    tags:
+      - 'sdk-v*'
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@zero-arena'
+
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+      - name: Rename to @zero-arena/sdk for GH Packages
+        run: npm pkg set name=@zero-arena/sdk
+
+      - name: Publish
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
