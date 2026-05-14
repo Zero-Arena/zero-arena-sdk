@@ -132,9 +132,9 @@ The verifiability story collapses if backtests aren't reproducible. The engine e
 
 Non-deterministic sources (LLM APIs) are still committed via `runHash`, but the certificate stays at T2 only.
 
-## Known issues
+## Security
 
-- `@0gfoundation/0g-storage-ts-sdk@1.2.9` transitively depends on an old `axios`. `npm audit` flags it; the vulnerable code path only talks to the 0G endpoints you configure and is not reachable from any consumer input.
+`npm audit` is clean as of 0.2.1. The package pins `axios>=1.12.0` via npm `overrides` to fix two upstream advisories (GHSA-xx6v-rp6x-q39c, GHSA-43fc-jf86-j433) that arrive transitively through `@0gfoundation/0g-storage-ts-sdk@1.2.9 → open-jsonrpc-provider`. Devtools (`vitest`, `vite`, `esbuild`) are pinned to the latest stable major. Verified after upgrade: 109/109 tests pass, end-to-end download + backtest reproduces the same runHash.
 
 ## License
 
