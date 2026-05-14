@@ -30,6 +30,17 @@ export { HttpOracleClient, type HttpOracleClientConfig } from './inft/HttpOracle
 export { LocalOracleClient, type LocalOracleClientConfig } from './inft/LocalOracleClient.js';
 
 export { runBacktest, WARMUP } from './backtest/BacktestEngine.js';
+// Paper trading (RFC-001) — bar-by-bar engine + streaming indicator state.
+export { PaperEngine, PAPER_WARMUP } from './backtest/PaperEngine.js';
+export {
+  StreamingIndicators,
+  type StreamingObservation,
+} from './backtest/streaming-indicators.js';
+
+// Re-export the small subset of ethers primitives that downstream consumers
+// (e.g. zero-arena-bacend's paper-engine daemon) need. Avoids forcing every
+// consumer to add ethers as a direct dependency just to keccak a buffer.
+export { keccak256, toUtf8Bytes } from 'ethers';
 export {
   composeRunHash,
   hashAgent,
