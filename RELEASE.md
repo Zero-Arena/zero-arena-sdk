@@ -48,14 +48,14 @@ Full per-contract commands live in [`contracts/README.md`](https://github.com/Ze
 cd contracts
 node scripts/build-abi.mjs
 npm publish --access public
-git tag contracts-v0.1.0 && git push --tags
+git tag contracts-v$(node -p "require('./package.json').version") && git push --tags
 ```
 
-Sanity check:
+Sanity check (use the version you just published):
 
 ```bash
 mkdir /tmp/check && cd /tmp/check && npm init -y >/dev/null
-npm install @zero-arena/contracts@0.1.0
+npm install @zero-arena/contracts@latest
 node -e "import('@zero-arena/contracts').then(m => console.log(m.addresses.galileo))"
 ```
 
@@ -76,7 +76,7 @@ Expect a printed `certId`, `tokenId`, and explorer link for each step.
 cd sdk
 npm test && npm run build
 npm publish --access public
-git tag sdk-v0.1.0 && git push --tags
+git tag sdk-v$(node -p "require('./package.json').version") && git push --tags
 ```
 
 Fresh-install check:
