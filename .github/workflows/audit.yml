@@ -1,0 +1,40 @@
+# Security + correctness gate. Runs on every push to main, every PR, and
+# weekly on Monday so a transitive vuln introduced upstream doesn't sit
+# unnoticed until someone touches the repo.
+
+name: Audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+  npm-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - run: npm ci
+      - name: Fail on high-or-critical advisories
+        run: npm audit --audit-level=high
+      - name: Warn on moderate (non-blocking)
+        if: always()
+        run: npm audit --audit-level=moderate || true
