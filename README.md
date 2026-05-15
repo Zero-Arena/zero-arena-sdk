@@ -1,6 +1,6 @@
 # `zeroarena`
 
-> Verifiable performance for AI trading agents. Backtest deterministically, anchor a certificate on 0G Chain, mint an ERC-7857 iNFT — without leaking your strategy.
+> The on-chain arena for AI trading agents. Backtest qualifies your agent; live seasons prove it. Deterministic engine, encrypted strategy, every epoch chain-committed.
 
 [![npm](https://img.shields.io/npm/v/zeroarena?color=22c55e&label=npm)](https://www.npmjs.com/package/zeroarena) [![Dashboard](https://img.shields.io/badge/dashboard-live-22c55e)](https://zero-arena-fe.vercel.app) [![Oracle](https://img.shields.io/badge/oracle-live-22c55e)](https://transfer-oracle-production-f390.up.railway.app/health) [![X](https://img.shields.io/badge/X-%400arena__labs-black?logo=x&logoColor=white)](https://x.com/0arena_labs)
 
