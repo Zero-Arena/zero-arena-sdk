@@ -41,6 +41,14 @@ export interface ChainConfig {
   rpc: string;
   privateKey: string;
   addresses: ChainAddresses;
+  /**
+   * Optional override for the legacy `gasPrice` (wei) applied to every tx.
+   * Galileo testnet rejects EIP-1559 envelopes with priority < 2 gwei, so
+   * the SDK defaults to a 3 gwei legacy gasPrice when the connected chain
+   * looks like Galileo (chainId 16602). Set explicitly to skip the heuristic
+   * (e.g. 0n disables overrides for compatible chains).
+   */
+  gasPriceOverride?: bigint;
 }
 
 export interface SubmitCertificateInput {
@@ -56,22 +64,57 @@ const UINT16_MAX = 65_535;
 const INT128_MAX = (1n << 127n) - 1n;
 const INT128_MIN = -(1n << 127n);
 
+/** Galileo testnet chain ID. Triggers the legacy gas-price default. */
+const GALILEO_CHAIN_ID = 16_602n;
+/** 3 gwei = above Galileo's 2-gwei priority floor. */
+const GALILEO_LEGACY_GAS_PRICE = 3_000_000_000n;
+
 export class ChainAdapter {
   private readonly signer: Signer;
   private readonly cert: Contract;
   private readonly inft: Contract;
   private readonly oracle: Contract;
+  private readonly provider: JsonRpcProvider;
+  /** Lazy-resolved legacy gasPrice override. `null` = use ethers default. */
+  private cachedTxOverrides: { gasPrice?: bigint } | null = null;
 
   constructor(public readonly cfg: ChainConfig) {
     assertAddress(cfg.addresses.AgentCertificate, 'AgentCertificate');
     assertAddress(cfg.addresses.ZeroArenaINFT, 'ZeroArenaINFT');
     assertAddress(cfg.addresses.ReencryptionOracle, 'ReencryptionOracle');
 
-    const provider = new JsonRpcProvider(cfg.rpc);
-    this.signer = new Wallet(cfg.privateKey, provider);
+    this.provider = new JsonRpcProvider(cfg.rpc);
+    this.signer = new Wallet(cfg.privateKey, this.provider);
     this.cert = new Contract(cfg.addresses.AgentCertificate, AGENT_CERTIFICATE_ABI, this.signer);
     this.inft = new Contract(cfg.addresses.ZeroArenaINFT, ZERO_ARENA_INFT_ABI, this.signer);
     this.oracle = new Contract(cfg.addresses.ReencryptionOracle, REENCRYPTION_ORACLE_ABI, this.signer);
+  }
+
+  /**
+   * Resolve the per-tx `{ gasPrice }` override once and cache. Galileo testnet
+   * rejects EIP-1559 envelopes with priority < 2 gwei; on that chain we send
+   * legacy 3 gwei. On other chains we let ethers pick fees.
+   */
+  private async txOverrides(): Promise<{ gasPrice?: bigint }> {
+    if (this.cachedTxOverrides) return this.cachedTxOverrides;
+
+    if (this.cfg.gasPriceOverride !== undefined) {
+      this.cachedTxOverrides = this.cfg.gasPriceOverride > 0n
+        ? { gasPrice: this.cfg.gasPriceOverride }
+        : {};
+      return this.cachedTxOverrides;
+    }
+
+    try {
+      const net = await this.provider.getNetwork();
+      this.cachedTxOverrides = net.chainId === GALILEO_CHAIN_ID
+        ? { gasPrice: GALILEO_LEGACY_GAS_PRICE }
+        : {};
+    } catch {
+      // Network lookup failed (offline tests etc.) — fall back to default.
+      this.cachedTxOverrides = {};
+    }
+    return this.cachedTxOverrides;
   }
 
   /** Address the SDK is signing transactions from. */
@@ -106,6 +149,7 @@ export class ChainAdapter {
     const maxDD = clampUint16(Math.max(0, Math.round(m.maxDrawdownBps)));
     const winRate = clampUint16(Math.max(0, Math.round(m.winRateBps)));
 
+    const overrides = await this.txOverrides();
     const tx = await this.cert.submit!(
       input.result.runHash,
       input.storageRootHash,
@@ -117,6 +161,7 @@ export class ChainAdapter {
       winRate,
       trustTierToByte(trustTier),
       marketToByte(input.result.market),
+      overrides,
     );
     const receipt = (await tx.wait()) as TransactionReceipt;
     const certId = parseCertSubmittedEvent(receipt, this.cert);
@@ -131,6 +176,59 @@ export class ChainAdapter {
       market: input.result.market,
       metrics: input.result.metrics,
       txHash: receipt.hash,
+    };
+  }
+
+  /**
+   * Find the *earliest* certificate matching a given runHash. Used by
+   * `ZeroArena.certify({ onDuplicate })` to dedupe re-submits. Returns
+   * `null` when no prior cert exists. The lookup uses an indexed event
+   * filter, so it's a single getLogs RPC.
+   */
+  async findCertificateByRunHash(runHash: string): Promise<
+    | (Certificate & { owner: string; createdAt: number })
+    | null
+  > {
+    const filter = this.cert.filters.CertificateSubmitted!(null, null, runHash);
+    const logs = await this.cert.queryFilter(filter, 0, 'latest');
+    if (logs.length === 0) return null;
+
+    // Earliest first — sort by (blockNumber, logIndex) to be deterministic.
+    logs.sort(
+      (a, b) =>
+        a.blockNumber - b.blockNumber || (a.index ?? 0) - (b.index ?? 0),
+    );
+    const first = logs[0];
+    if (!first) return null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const args = (first as any).args;
+    const certId: bigint = args?.certId ?? args?.[0];
+    if (typeof certId !== 'bigint') return null;
+
+    const c = await this.getCertificate(certId);
+    return {
+      certId,
+      runHash: c.runHash,
+      storageRootHash: c.storageRootHash,
+      datasetHash: c.datasetHash,
+      attestationHash: c.attestationHash,
+      trustTier: c.trustTier,
+      market: c.market,
+      // ChainAdapter doesn't read full metrics back as the rich Metrics
+      // shape; callers wanting metrics should re-derive from the run log.
+      metrics: {
+        totalReturnBps: c.metrics.totalReturnBps,
+        sharpeX1000: c.metrics.sharpeX1000,
+        sortinoX1000: 0,
+        maxDrawdownBps: c.metrics.maxDrawdownBps,
+        profitFactorX1000: 0,
+        winRateBps: c.metrics.winRateBps,
+        numTrades: 0,
+        finalEquity: 0,
+      },
+      txHash: first.transactionHash,
+      owner: c.owner,
+      createdAt: c.createdAt,
     };
   }
 
@@ -172,7 +270,13 @@ export class ChainAdapter {
     metadataHash: string;
     storageRoot: string;
   }): Promise<INFT> {
-    const tx = await this.inft.mint!(input.certificateId, input.metadataHash, input.storageRoot);
+    const overrides = await this.txOverrides();
+    const tx = await this.inft.mint!(
+      input.certificateId,
+      input.metadataHash,
+      input.storageRoot,
+      overrides,
+    );
     const receipt = (await tx.wait()) as TransactionReceipt;
     const tokenId = parseAgentMintedEvent(receipt, this.inft);
     const owner = await this.signerAddress();
@@ -200,12 +304,14 @@ export class ChainAdapter {
     sealedKey: Uint8Array;
     proof: Uint8Array;
   }): Promise<TransferResult> {
+    const overrides = await this.txOverrides();
     const tx = await this.inft.transfer!(
       input.from,
       input.to,
       input.tokenId,
       hexlify(input.sealedKey),
       hexlify(input.proof),
+      overrides,
     );
     const receipt = (await tx.wait()) as TransactionReceipt;
     const newMetadataHash = parseMetadataUpdatedEvent(receipt, this.inft, input.tokenId);
