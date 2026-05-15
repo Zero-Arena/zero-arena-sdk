@@ -153,7 +153,18 @@ export class ZeroArena {
     });
   }
 
-  /** Mint a passing certificate as an ERC-7857 iNFT. */
+  /**
+   * Mint a passing certificate as an ERC-7857 iNFT.
+   *
+   * NOTE: `ZeroArenaINFT` enforces an admin-configurable performance gate.
+   * The default is `minTotalReturnBps = 0` and `minSharpeX1000 = 1000`
+   * (Sharpe ≥ 1.0) — any losing-strategy or low-Sharpe backtest reverts with
+   * `ThresholdNotMet()`. To mint anyway (e.g. to enrol a losing agent in a
+   * paper-trading Season for comparison), the contract admin can lower the
+   * thresholds via `ZeroArenaINFT.setThresholds(int128 minReturn, uint128 minSharpe)`.
+   * The certificate itself is anchored regardless of threshold — only the
+   * iNFT mint is gated.
+   */
   async mintAgent(opts: {
     agent: Agent;
     certificate: Certificate;
