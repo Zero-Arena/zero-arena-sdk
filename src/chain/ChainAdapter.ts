@@ -179,6 +179,59 @@ export class ChainAdapter {
     };
   }
 
+  /**
+   * Find the *earliest* certificate matching a given runHash. Used by
+   * `ZeroArena.certify({ onDuplicate })` to dedupe re-submits. Returns
+   * `null` when no prior cert exists. The lookup uses an indexed event
+   * filter, so it's a single getLogs RPC.
+   */
+  async findCertificateByRunHash(runHash: string): Promise<
+    | (Certificate & { owner: string; createdAt: number })
+    | null
+  > {
+    const filter = this.cert.filters.CertificateSubmitted!(null, null, runHash);
+    const logs = await this.cert.queryFilter(filter, 0, 'latest');
+    if (logs.length === 0) return null;
+
+    // Earliest first — sort by (blockNumber, logIndex) to be deterministic.
+    logs.sort(
+      (a, b) =>
+        a.blockNumber - b.blockNumber || (a.index ?? 0) - (b.index ?? 0),
+    );
+    const first = logs[0];
+    if (!first) return null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const args = (first as any).args;
+    const certId: bigint = args?.certId ?? args?.[0];
+    if (typeof certId !== 'bigint') return null;
+
+    const c = await this.getCertificate(certId);
+    return {
+      certId,
+      runHash: c.runHash,
+      storageRootHash: c.storageRootHash,
+      datasetHash: c.datasetHash,
+      attestationHash: c.attestationHash,
+      trustTier: c.trustTier,
+      market: c.market,
+      // ChainAdapter doesn't read full metrics back as the rich Metrics
+      // shape; callers wanting metrics should re-derive from the run log.
+      metrics: {
+        totalReturnBps: c.metrics.totalReturnBps,
+        sharpeX1000: c.metrics.sharpeX1000,
+        sortinoX1000: 0,
+        maxDrawdownBps: c.metrics.maxDrawdownBps,
+        profitFactorX1000: 0,
+        winRateBps: c.metrics.winRateBps,
+        numTrades: 0,
+        finalEquity: 0,
+      },
+      txHash: first.transactionHash,
+      owner: c.owner,
+      createdAt: c.createdAt,
+    };
+  }
+
   /** Read a certificate by id. */
   async getCertificate(certId: bigint): Promise<{
     runHash: string;
