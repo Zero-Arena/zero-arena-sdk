@@ -2,6 +2,25 @@
 
 > Verifiable performance for AI trading agents. Backtest deterministically, anchor a certificate on 0G Chain, mint an ERC-7857 iNFT — without leaking your strategy.
 
+[![npm](https://img.shields.io/npm/v/zeroarena?color=22c55e&label=npm)](https://www.npmjs.com/package/zeroarena) [![Dashboard](https://img.shields.io/badge/dashboard-live-22c55e)](https://zero-arena-fe.vercel.app) [![Oracle](https://img.shields.io/badge/oracle-live-22c55e)](https://transfer-oracle-production-f390.up.railway.app/health)
+
+## Production endpoints (Galileo testnet, chainId 16602)
+
+| | URL / Address |
+| - | - |
+| Dashboard | [zero-arena-fe.vercel.app](https://zero-arena-fe.vercel.app) |
+| Transfer oracle | `https://transfer-oracle-production-f390.up.railway.app` |
+| 0G Chain RPC | `https://evmrpc-testnet.0g.ai` |
+| 0G Storage indexer | `https://indexer-storage-testnet-turbo.0g.ai` |
+| 0G Explorer | [chainscan-galileo.0g.ai](https://chainscan-galileo.0g.ai) |
+| `AgentCertificate` | `0x77f29d2a7BcAC679812d9a0FB1c7508eDA6B087e` |
+| `ZeroArenaINFT` | `0xF7162ecbdB11DE4704043D4aF93B4030AD61700e` |
+| `ReencryptionOracle` | `0x733667CEBB27e310a8fb60799Af73A8C1fe501b2` |
+| `LiveCertificate` | `0x2c71fe022E4698f8fD63384A19Cd69D72a714b4d` |
+| `Season` | `0x8fb87CE34b4e8F4C65eeB6752b0168EC37806CF3` |
+
+These addresses ship pre-pinned via `npx zeroarena init` — you usually don't need to copy them by hand.
+
 ## Scaffold a project in one command
 
 ```bash
@@ -85,7 +104,10 @@ import { ZeroArena, HttpOracleClient } from 'zeroarena';
 
 const za = new ZeroArena({
   ...,
-  oracle: new HttpOracleClient({ url: 'https://your-oracle.example.com' }),
+  oracle: new HttpOracleClient({
+    // Production oracle deployed by Zero Arena. Or run your own (see zero-arena-bacend).
+    url: 'https://transfer-oracle-production-f390.up.railway.app',
+  }),
 });
 ```
 
@@ -105,7 +127,7 @@ CLI reads `process.env`: `PRIVATE_KEY`, `ZA_RPC`, `ZA_INDEXER`, `ZA_ADDR_CERT`, 
 ## What you get
 
 - Deterministic `BacktestEngine` (no `Math.random`, no `Date.now`). Same agent + same dataset → same `runHash`, byte-identical.
-- Spot and perpetual futures. Perp adds configurable leverage (≤10×), 8h funding accrual, isolated-margin liquidation.
+- **Spot** is the v0.2 canonical market. The perp engine is feature-complete (configurable leverage ≤10×, 8h funding accrual, isolated-margin liquidation) but is officially v0.3 scope — usable today via `market: 'perp'`, not yet the canonical demo path.
 - AES-256-GCM encryption on run logs and agent metadata — your code never leaves the machine in plaintext.
 - 0G Storage upload via `@0gfoundation/0g-storage-ts-sdk`.
 - 0G Chain anchoring of `runHash`, storage root, dataset root, metrics, and `trustTier`.
