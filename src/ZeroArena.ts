@@ -28,6 +28,29 @@ export interface CertifyOptions {
   trustTier?: TrustTier;
   /** Reserved for v0.2 T3 quotes. */
   attestationHash?: string;
+  /**
+   * Behavior when a certificate with the same `runHash` is already anchored
+   * on chain:
+   *   • `'submit-anyway'` (default) — submit a duplicate. Earlier behavior.
+   *   • `'warn'` — log a console.warn and submit.
+   *   • `'skip'` — skip the chain write and return the existing cert. Saves
+   *     gas on re-runs at the cost of one extra event-query RPC roundtrip.
+   *   • `'throw'` — throw a CertificateDuplicateError. Strictest.
+   */
+  onDuplicate?: 'submit-anyway' | 'warn' | 'skip' | 'throw';
+}
+
+export class CertificateDuplicateError extends Error {
+  constructor(
+    public readonly runHash: string,
+    public readonly existingCertId: bigint,
+  ) {
+    super(
+      `certify: runHash ${runHash} already anchored as cert #${existingCertId.toString()} ` +
+        `(set onDuplicate to 'submit-anyway' to override)`,
+    );
+    this.name = 'CertificateDuplicateError';
+  }
 }
 
 export class ZeroArena {
@@ -78,6 +101,36 @@ export class ZeroArena {
       throw new Error(
         'certify: trustTier T3 requires an attestationHash. v0.1 only supports T1 + T2 — see CLAUDE.md 3.',
       );
+    }
+
+    // Cheap on-chain dedupe check (one event-query RPC). Skipped only when
+    // user explicitly opts into the legacy submit-anyway path.
+    const onDuplicate = opts.onDuplicate ?? 'submit-anyway';
+    if (onDuplicate !== 'submit-anyway') {
+      const existing = await this.chain.findCertificateByRunHash(result.runHash);
+      if (existing) {
+        if (onDuplicate === 'throw') {
+          throw new CertificateDuplicateError(result.runHash, existing.certId);
+        }
+        if (onDuplicate === 'skip') {
+          return {
+            certId: existing.certId,
+            runHash: existing.runHash,
+            storageRootHash: existing.storageRootHash,
+            datasetHash: existing.datasetHash,
+            attestationHash: existing.attestationHash,
+            trustTier: existing.trustTier,
+            market: existing.market,
+            metrics: result.metrics, // off-chain metrics (full precision)
+            txHash: existing.txHash,
+          };
+        }
+        // 'warn'
+        console.warn(
+          `certify: runHash ${result.runHash} already anchored as cert #${existing.certId.toString()} — submitting a duplicate. ` +
+            `Set { onDuplicate: 'skip' } to reuse the existing cert and save gas.`,
+        );
+      }
     }
 
     const runLog = buildRunLog(result);
