@@ -97,7 +97,42 @@ abstract class Agent {
 }
 ```
 
-`transferAgent()` requires an `OracleClient`. Pass it at construction:
+## Delegate live operation (v0.3, opt-in)
+
+After mint, the owner can either self-operate the paper daemon OR delegate to Zero Arena's backend so live-cert metrics keep ticking without the owner running their own server. The on-chain operator role is admin-curated globally; the owner's signed `/onboard` payload is per-token consent.
+
+```ts
+import { HttpOnboardClient } from 'zeroarena';
+import { Wallet } from 'ethers';
+import { readFileSync } from 'node:fs';
+
+const owner = new Wallet(process.env.PRIVATE_KEY!);
+
+const onboard = new HttpOnboardClient({
+  url: 'https://onboard-production-ed6c.up.railway.app',
+  authToken: process.env.ONBOARD_AUTH_TOKEN, // required by the production deployment
+});
+
+const result = await onboard.onboard(
+  {
+    tokenId: 5n,
+    agentSource: readFileSync('./agent.ts', 'utf8'),
+    genesisHash: '0x…',          // your static cert's runHash
+    barsPerEpoch: 4,             // optional — defaults to 96 (24h at 15m)
+  },
+  owner,                          // any ethers.js signer
+);
+// → { status: "onboarded", tokenId: "5", operator: "0xB1a5402E…", pid: 113, startedAt: "…" }
+
+// Later — stop the delegated daemon:
+await onboard.offboard({ tokenId: 5n }, owner);
+```
+
+Trust shift: from owner reputation (self-operate, cheatable) to Zero Arena's public operator reputation (one entity, accountable). v0.4 moves the orchestrator into a 0G Compute TEE; the HTTP surface and the SDK client interface stay the same.
+
+## Oracle (transfer flow)
+
+
 
 ```ts
 import { ZeroArena, HttpOracleClient } from 'zeroarena';
