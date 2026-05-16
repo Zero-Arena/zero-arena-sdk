@@ -47,6 +47,7 @@ export {
   HttpOnboardClient,
   type HttpOnboardClientConfig,
 } from './onboard/HttpOnboardClient.js';
+export { encryptAgentSource, type EncryptedAgentBundle } from './onboard/crypto.js';
 
 export { runBacktest, WARMUP } from './backtest/BacktestEngine.js';
 // Paper trading (RFC-001) — bar-by-bar engine + streaming indicator state.
