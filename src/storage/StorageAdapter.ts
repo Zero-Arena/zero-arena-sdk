@@ -17,9 +17,9 @@ import type { Candle, Dataset, DatasetMeta } from '../types.js';
 import { decrypt, encrypt, generateKey } from './encryption.js';
 
 export interface StorageConfig {
-  /** 0G Storage indexer URL (e.g. https://indexer-storage-testnet-turbo.0g.ai). */
+  /** 0G Storage indexer URL — `https://indexer-storage-turbo.0g.ai`. */
   indexerUrl: string;
-  /** EVM RPC the indexer uses for fee submission (e.g. https://evmrpc-testnet.0g.ai). */
+  /** 0G mainnet RPC the indexer uses for fee submission — `https://evmrpc.0g.ai`. */
   evmRpc: string;
   /** Signer with gas balance to pay storage fees. */
   signer: Signer;

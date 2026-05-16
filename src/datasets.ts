@@ -1,11 +1,11 @@
-// Canonical Galileo dataset pointers. Bumped per SDK patch release whenever
-// the workspace operator re-uploads via `bacend dataset upload`.
+// Canonical dataset pointers on 0G mainnet (chainId 16661) Storage. Bumped
+// per SDK release whenever the workspace operator re-uploads via
+// `npx zeroarena dataset upload <csv>`.
 //
-// v0.2 scope: only BTC/USDT 15m spot is anchored. 0G/USDT spot and BTC/USDT
-// perpetuals are deferred — 0G Storage finalization for ~1MB+ uploads hangs
-// on the Galileo testnet, and `fapi.binance.com` is geo-blocked from the
-// workspace operator's network. Both come back when the storage testnet
-// stabilizes or perp ingest moves to a non-blocked endpoint.
+// Scope: BTC/USDT 15m spot is the canonical entry. 0G/USDT spot and BTC/USDT
+// perpetuals are deferred — `fapi.binance.com` is geo-blocked from several
+// deployment regions; perp ingest is canonical from the Singapore-region
+// paper-engine host.
 
 export interface CanonicalDataset {
   rootHash: string;
@@ -22,15 +22,15 @@ export interface CanonicalDataset {
 
 export const CANONICAL_DATASETS: Record<string, CanonicalDataset> = {
   'BTCUSDT-15m-spot': {
-    rootHash: '0xbdf356979b9dac6e742feb0362df54a158c0c358113d15233fa00e74fc5b3ad1',
-    datasetHash: '0xef045d37191201052a600853e2a1f4bdcd0f6abed368b71d237e17b573972361',
+    rootHash: '0x81a17c8b291b6bf77de03d6042cec83a517958dae5092025ee6b49ddcae962ff',
+    datasetHash: '0x19b099f5ef0ceeb9b2d2c00aa339110f44c068f4dd9b1976db04b9733f4d6107',
     symbol: 'BTCUSDT',
     interval: '15m',
     market: 'spot',
     source: 'binance',
     startTs: 1775952000000,
-    endTs: 1778553000000,
-    candleCount: 2891,
-    uploadedAt: '2026-05-12T02:35:51.166Z',
+    endTs: 1778557500000,
+    candleCount: 2896,
+    uploadedAt: '2026-05-16T11:58:00.000Z',
   },
 };

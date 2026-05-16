@@ -43,8 +43,9 @@ export interface ResolvedConfig {
  * service) or a `LocalOracleClient` if you operate the oracle yourself.
  */
 export function configFromEnv(): ResolvedConfig {
-  const rpc = required('ZA_RPC', 'https://evmrpc-testnet.0g.ai');
-  const indexer = required('ZA_INDEXER', 'https://indexer-storage-testnet-turbo.0g.ai');
+  // 0G mainnet (chainId 16661) endpoints.
+  const rpc = required('ZA_RPC', 'https://evmrpc.0g.ai');
+  const indexer = required('ZA_INDEXER', 'https://indexer-storage-turbo.0g.ai');
   const privateKey = required('PRIVATE_KEY');
 
   const cfg: ResolvedConfig = {

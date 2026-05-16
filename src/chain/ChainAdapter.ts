@@ -42,11 +42,10 @@ export interface ChainConfig {
   privateKey: string;
   addresses: ChainAddresses;
   /**
-   * Optional override for the legacy `gasPrice` (wei) applied to every tx.
-   * Galileo testnet rejects EIP-1559 envelopes with priority < 2 gwei, so
-   * the SDK defaults to a 3 gwei legacy gasPrice when the connected chain
-   * looks like Galileo (chainId 16602). Set explicitly to skip the heuristic
-   * (e.g. 0n disables overrides for compatible chains).
+   * Optional legacy `gasPrice` override (wei) applied to every tx. 0G mainnet
+   * (chainId 16661) accepts EIP-1559 envelopes natively, so the SDK leaves
+   * fees to ethers by default. Set this only if you need to pin a custom
+   * priority fee (e.g. to push a stuck tx through).
    */
   gasPriceOverride?: bigint;
 }
@@ -63,11 +62,6 @@ const ZERO_BYTES32 = '0x00000000000000000000000000000000000000000000000000000000
 const UINT16_MAX = 65_535;
 const INT128_MAX = (1n << 127n) - 1n;
 const INT128_MIN = -(1n << 127n);
-
-/** Galileo testnet chain ID. Triggers the legacy gas-price default. */
-const GALILEO_CHAIN_ID = 16_602n;
-/** 3 gwei = above Galileo's 2-gwei priority floor. */
-const GALILEO_LEGACY_GAS_PRICE = 3_000_000_000n;
 
 export class ChainAdapter {
   private readonly signer: Signer;
@@ -91,29 +85,16 @@ export class ChainAdapter {
   }
 
   /**
-   * Resolve the per-tx `{ gasPrice }` override once and cache. Galileo testnet
-   * rejects EIP-1559 envelopes with priority < 2 gwei; on that chain we send
-   * legacy 3 gwei. On other chains we let ethers pick fees.
+   * Resolve the per-tx `{ gasPrice }` override once and cache. Empty by
+   * default — 0G mainnet (chainId 16661) accepts EIP-1559 envelopes, so
+   * ethers picks fees. `cfg.gasPriceOverride` is the user-supplied escape
+   * hatch for custom priority fees.
    */
   private async txOverrides(): Promise<{ gasPrice?: bigint }> {
     if (this.cachedTxOverrides) return this.cachedTxOverrides;
-
-    if (this.cfg.gasPriceOverride !== undefined) {
-      this.cachedTxOverrides = this.cfg.gasPriceOverride > 0n
-        ? { gasPrice: this.cfg.gasPriceOverride }
-        : {};
-      return this.cachedTxOverrides;
-    }
-
-    try {
-      const net = await this.provider.getNetwork();
-      this.cachedTxOverrides = net.chainId === GALILEO_CHAIN_ID
-        ? { gasPrice: GALILEO_LEGACY_GAS_PRICE }
-        : {};
-    } catch {
-      // Network lookup failed (offline tests etc.) — fall back to default.
-      this.cachedTxOverrides = {};
-    }
+    this.cachedTxOverrides = this.cfg.gasPriceOverride && this.cfg.gasPriceOverride > 0n
+      ? { gasPrice: this.cfg.gasPriceOverride }
+      : {};
     return this.cachedTxOverrides;
   }
 

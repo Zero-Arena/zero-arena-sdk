@@ -12,7 +12,7 @@ export interface Generated {
   readmeNote: string;
 }
 
-const ZEROARENA_DEP_VERSION = '^0.2.1';
+const ZEROARENA_DEP_VERSION = '^0.5.0';
 
 // ─── rule-based: RSI ──────────────────────────────────────────────────────
 
@@ -364,19 +364,19 @@ export function tsconfigJson(): string {
 
 export function envFile(params: {
   keyLine: string;
-  galileo: { rpc: string; indexer: string; cert: string; inft: string; oracle: string };
+  network: { rpc: string; indexer: string; cert: string; inft: string; oracle: string };
   extraEnv: string[];
 }): string {
   return [
-    `ZA_RPC=${params.galileo.rpc}`,
-    `ZA_INDEXER=${params.galileo.indexer}`,
+    `ZA_RPC=${params.network.rpc}`,
+    `ZA_INDEXER=${params.network.indexer}`,
     '',
     '# Your wallet. Signs certify + mintAgent, pays gas, owns the iNFT.',
     `PRIVATE_KEY=${params.keyLine}`,
     '',
-    `ZA_ADDR_CERT=${params.galileo.cert}`,
-    `ZA_ADDR_INFT=${params.galileo.inft}`,
-    `ZA_ADDR_ORACLE=${params.galileo.oracle}`,
+    `ZA_ADDR_CERT=${params.network.cert}`,
+    `ZA_ADDR_INFT=${params.network.inft}`,
+    `ZA_ADDR_ORACLE=${params.network.oracle}`,
     ...params.extraEnv,
     '',
   ].join('\n');
@@ -435,12 +435,12 @@ async function main() {
   console.log(\`\\n▸ certifying on 0G Chain…\`);
   const cert = await za.certify(result);
   console.log(\`  certId: \${cert.certId}\`);
-  console.log(\`  tx:     https://chainscan-galileo.0g.ai/tx/\${cert.txHash}\`);
+  console.log(\`  tx:     https://chainscan.0g.ai/tx/\${cert.txHash}\`);
 
   console.log(\`\\n▸ minting iNFT…\`);
   const inft = await za.mintAgent({ agent, certificate: cert, name: '${params.mintName}' });
   console.log(\`  tokenId: \${inft.tokenId}\`);
-  console.log(\`  tx:      https://chainscan-galileo.0g.ai/tx/\${inft.txHash}\`);
+  console.log(\`  tx:      https://chainscan.0g.ai/tx/\${inft.txHash}\`);
 
   console.log(\`\\n✓ done. Trust tier: T2 (commitment + reproducibility).\`);
 }
@@ -471,7 +471,7 @@ npm run backtest   # offline backtest (no chain calls)
 npm start          # backtest → certify on 0G Chain → mint iNFT
 \`\`\`
 
-You'll see a \`runHash\`, a \`certId\` on \`AgentCertificate\`, and a \`tokenId\` on \`ZeroArenaINFT\`. Every value is linkable on <https://chainscan-galileo.0g.ai>.
+You'll see a \`runHash\`, a \`certId\` on \`AgentCertificate\`, and a \`tokenId\` on \`ZeroArenaINFT\`. Every value is linkable on <https://chainscan.0g.ai>.
 
 ## Edit
 

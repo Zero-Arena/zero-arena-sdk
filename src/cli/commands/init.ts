@@ -25,12 +25,14 @@ import {
   type Market,
 } from './init-templates.js';
 
-const GALILEO = {
-  rpc: 'https://evmrpc-testnet.0g.ai',
-  indexer: 'https://indexer-storage-testnet-turbo.0g.ai',
-  cert: '0x77f29d2a7BcAC679812d9a0FB1c7508eDA6B087e',
-  inft: '0xF7162ecbdB11DE4704043D4aF93B4030AD61700e',
-  oracle: '0x733667CEBB27e310a8fb60799Af73A8C1fe501b2',
+// 0G mainnet (chainId 16661) — canonical from v0.5. Addresses match
+// @zero-arena/contracts dist/addresses.json under the "mainnet" key.
+const MAINNET = {
+  rpc: 'https://evmrpc.0g.ai',
+  indexer: 'https://indexer-storage-turbo.0g.ai',
+  cert: '0x21a5DEA59cfA07B261d389A9554477e137805c2f',
+  inft: '0x4Bd4d45f206861aa7cD4421785a316A1dD06036f',
+  oracle: '0x63909dA30b0d65ad72b32b3C8C82515f7BFA6Fd6',
 };
 
 type StrategyKey = 'rsi' | 'macd' | 'ema' | 'llm' | 'custom';
@@ -221,7 +223,7 @@ async function promptKey(rl: ReturnType<typeof createInterface>): Promise<string
     const m = /Private key:\s*(0x[0-9a-fA-F]{64})/.exec(raw);
     if (!m) throw new Error('cast wallet new: could not parse output');
     const key = m[1]!;
-    process.stdout.write(`  → ${computeAddress(key)}\n  fund at https://faucet.0g.ai\n`);
+    process.stdout.write(`  → ${computeAddress(key)}\n  fund this address with 0G on mainnet before running\n`);
     return key;
   }
   return undefined;
@@ -240,8 +242,8 @@ function buildFiles(p: {
   mintName: string;
 }): Array<[string, string]> {
   const keyLine = p.privateKey ?? '0x';
-  const env = envFile({ keyLine, galileo: GALILEO, extraEnv: p.generated.extraEnv });
-  const envExample = envFile({ keyLine: '0x', galileo: GALILEO, extraEnv: p.generated.extraEnv });
+  const env = envFile({ keyLine, network: MAINNET, extraEnv: p.generated.extraEnv });
+  const envExample = envFile({ keyLine: '0x', network: MAINNET, extraEnv: p.generated.extraEnv });
   return [
     ['package.json', pkgJson(p.name, p.generated.extraDeps)],
     ['tsconfig.json', tsconfigJson()],
@@ -273,12 +275,12 @@ function printSummary(s: {
   const addr = s.privateKey ? computeAddress(s.privateKey) : null;
   process.stdout.write(`\n✓ created ${s.name}/\n`);
   process.stdout.write(`  strategy: ${s.strategy} on ${s.market}\n`);
-  if (addr) process.stdout.write(`  wallet:   ${addr}\n  faucet:   https://faucet.0g.ai\n`);
+  if (addr) process.stdout.write(`  wallet:   ${addr}\n  fund:     send 0G mainnet to this address before running\n`);
   else process.stdout.write(`  ⚠ no PRIVATE_KEY set — edit .env before running\n`);
   if (s.generated.extraEnv.some((l) => l.endsWith('_API_KEY='))) {
     process.stdout.write(`  ⚠ set the *_API_KEY value in .env, or the agent falls back to a deterministic heuristic\n`);
   }
-  process.stdout.write(`\nNext:\n  cd ${s.name}\n  ${s.shouldInstall ? '' : 'npm install\n  '}npm run backtest   # offline\n  npm start          # full pipeline (needs PRIVATE_KEY + Galileo gas)\n`);
+  process.stdout.write(`\nNext:\n  cd ${s.name}\n  ${s.shouldInstall ? '' : 'npm install\n  '}npm run backtest   # offline\n  npm start          # full pipeline (needs PRIVATE_KEY + 0G on mainnet)\n`);
 }
 
 function clamp(n: number, lo: number, hi: number): number {

@@ -217,7 +217,7 @@ function resolveAddresses(cfg: ZeroArenaConfig): ChainAddresses {
   if (!a.AgentCertificate || !a.ZeroArenaINFT || !a.ReencryptionOracle) {
     throw new Error(
       'ZeroArenaConfig.addresses must include AgentCertificate, ZeroArenaINFT, and ReencryptionOracle. ' +
-      'After deploying the contracts, copy them from contracts/deployments/galileo-testnet.json.',
+      'After deploying the contracts, copy them from contracts/deployments/16661.json.',
     );
   }
   return {

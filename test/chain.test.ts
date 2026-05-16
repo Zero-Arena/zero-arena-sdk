@@ -1,6 +1,6 @@
 // Offline smoke tests for ChainAdapter — verifies the embedded ABI fragments
 // parse and expose the methods/events the SDK calls. Live RPC tests are
-// covered by the example flows on Galileo testnet.
+// covered by the example flows on 0G mainnet.
 
 import { Interface } from 'ethers';
 import { describe, expect, it } from 'vitest';

@@ -4,22 +4,24 @@
 
 [![npm](https://img.shields.io/npm/v/zeroarena?color=22c55e&label=npm)](https://www.npmjs.com/package/zeroarena) [![Dashboard](https://img.shields.io/badge/dashboard-live-22c55e)](https://zero-arena-fe.vercel.app) [![Oracle](https://img.shields.io/badge/oracle-live-22c55e)](https://transfer-oracle-production-f390.up.railway.app/health) [![X](https://img.shields.io/badge/X-%400arena__labs-black?logo=x&logoColor=white)](https://x.com/0arena_labs)
 
-## Production endpoints (Galileo testnet, chainId 16602)
+## Production endpoints — 0G mainnet (chainId 16661)
 
 | | URL / Address |
 | - | - |
 | Dashboard | [zero-arena-fe.vercel.app](https://zero-arena-fe.vercel.app) |
 | Transfer oracle | `https://transfer-oracle-production-f390.up.railway.app` |
-| 0G Chain RPC | `https://evmrpc-testnet.0g.ai` |
-| 0G Storage indexer | `https://indexer-storage-testnet-turbo.0g.ai` |
-| 0G Explorer | [chainscan-galileo.0g.ai](https://chainscan-galileo.0g.ai) |
-| `AgentCertificate` | `0x77f29d2a7BcAC679812d9a0FB1c7508eDA6B087e` |
-| `ZeroArenaINFT` | `0xF7162ecbdB11DE4704043D4aF93B4030AD61700e` |
-| `ReencryptionOracle` | `0x733667CEBB27e310a8fb60799Af73A8C1fe501b2` |
-| `LiveCertificate` | `0x2c71fe022E4698f8fD63384A19Cd69D72a714b4d` |
-| `Season` | `0x8fb87CE34b4e8F4C65eeB6752b0168EC37806CF3` |
+| 0G Chain RPC | `https://evmrpc.0g.ai` |
+| 0G Storage indexer | `https://indexer-storage-turbo.0g.ai` |
+| 0G Explorer | [chainscan.0g.ai](https://chainscan.0g.ai) |
+| `AgentCertificate` | `0x21a5DEA59cfA07B261d389A9554477e137805c2f` |
+| `ZeroArenaINFT` | `0x4Bd4d45f206861aa7cD4421785a316A1dD06036f` |
+| `ReencryptionOracle` | `0x63909dA30b0d65ad72b32b3C8C82515f7BFA6Fd6` |
+| `LiveCertificate` | `0x168c244c872f5FC2D737D3126D08e9EEE45fFbc7` |
+| `Season` | `0x4e900860565F9D399B7295c0D28CC7954202524e` |
 
 These addresses ship pre-pinned via `npx zeroarena init` — you usually don't need to copy them by hand.
+
+> **Mainnet preview caveat.** `ReencryptionOracle` is the v0.1 trusted-ECDSA stub. The wallet holding the oracle private key can forge any ERC-7857 transfer. v0.4 swaps `verifyTransfer()` for 0G Compute TEE-quote verification (no client-side change). Until then, treat the mainnet oracle key as a custody root and avoid high-value transfers.
 
 ## Scaffold a project in one command
 
@@ -37,7 +39,7 @@ The interactive wizard walks you through:
 - **Strategy parameters** — oversold/overbought thresholds, position size, leverage, etc.
 - **Wallet setup** — paste your key, generate one with `cast wallet new`, or fill `.env` later
 
-Galileo addresses are pre-pinned. The wizard writes `agent.ts`, `run.ts`, `.env`, `package.json`, and a per-template README.
+Mainnet addresses are pre-pinned. The wizard writes `agent.ts`, `run.ts`, `.env`, `package.json`, and a per-template README.
 
 ## Or install manually
 
@@ -60,8 +62,8 @@ class RsiAgent extends Agent {
 }
 
 const za = new ZeroArena({
-  rpc: 'https://evmrpc-testnet.0g.ai',
-  indexer: 'https://indexer-storage-testnet-turbo.0g.ai',
+  rpc: 'https://evmrpc.0g.ai',                       // 0G mainnet (16661)
+  indexer: 'https://indexer-storage-turbo.0g.ai',
   privateKey: process.env.PRIVATE_KEY!,
   addresses: {
     AgentCertificate: process.env.ZA_ADDR_CERT!,
@@ -208,7 +210,7 @@ Non-deterministic sources (LLM APIs) are still committed via `runHash`, but the 
 
 ## Security
 
-`npm audit` is clean as of 0.2.1. The package pins `axios>=1.12.0` via npm `overrides` to fix two upstream advisories (GHSA-xx6v-rp6x-q39c, GHSA-43fc-jf86-j433) that arrive transitively through `@0gfoundation/0g-storage-ts-sdk@1.2.9 → open-jsonrpc-provider`. Devtools (`vitest`, `vite`, `esbuild`) are pinned to the latest stable major. Verified after upgrade: 109/109 tests pass, end-to-end download + backtest reproduces the same runHash.
+`npm audit` is clean as of 0.5.0. The package pins `axios>=1.12.0` via npm `overrides` to fix two upstream advisories (GHSA-xx6v-rp6x-q39c, GHSA-43fc-jf86-j433) that arrive transitively through `@0gfoundation/0g-storage-ts-sdk@1.2.9 → open-jsonrpc-provider`. Devtools (`vitest`, `vite`, `esbuild`) are pinned to the latest stable major. Verified: 109/109 tests pass, end-to-end download + backtest reproduces the same runHash.
 
 ## License
 
