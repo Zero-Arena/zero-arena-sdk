@@ -54,6 +54,10 @@ export interface OnboardHealth {
   operator: string;
   active: number;
   authRequired: boolean;
+  /** Compressed secp256k1 pubkey (33-byte hex with 0x prefix). v0.4 BE+. */
+  operatorPubKey?: string;
+  /** Encryption scheme tag exposed by the server. v0.4 BE+. */
+  encryptionScheme?: string;
 }
 
 export interface OnboardStatus {

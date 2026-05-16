@@ -23,6 +23,7 @@ import {
   type OnboardStatus,
   type SignedOnboardPayload,
 } from './OnboardClient.js';
+import { encryptAgentSource, type EncryptedAgentBundle } from './crypto.js';
 
 export interface HttpOnboardClientConfig {
   /** Base URL of the onboard service. Trailing slash optional. */
@@ -39,6 +40,17 @@ export interface HttpOnboardClientConfig {
   now?: () => number;
   /** How far in the future the signed deadline sits, in seconds. Default 600. */
   deadlineWindowSec?: number;
+  /**
+   * Encrypt `agentSource` against the operator's secp256k1 pubkey before
+   * POSTing. Defaults to `true`. The pubkey is fetched from `/health`
+   * lazily on the first onboard() unless `operatorPubKey` is set below.
+   */
+  encrypt?: boolean;
+  /**
+   * Pin the operator's compressed secp256k1 pubkey (33-byte hex). When
+   * unset, the client fetches it from `/health` on the first onboard().
+   */
+  operatorPubKey?: string;
 }
 
 const DEFAULTS = {
@@ -59,6 +71,8 @@ export class HttpOnboardClient implements OnboardClient {
   private readonly randomBytes: (size: number) => Uint8Array;
   private readonly nowSec: () => number;
   private readonly deadlineWindowSec: number;
+  private readonly encrypt: boolean;
+  private operatorPubKey: string | undefined;
 
   constructor(config: HttpOnboardClientConfig) {
     if (!config.url) throw new Error('HttpOnboardClient: url is required');
@@ -82,6 +96,8 @@ export class HttpOnboardClient implements OnboardClient {
         return out;
       });
     this.nowSec = config.now ?? ((): number => Math.floor(Date.now() / 1000));
+    this.encrypt = config.encrypt ?? true;
+    this.operatorPubKey = config.operatorPubKey;
   }
 
   // ─── Public API ────────────────────────────────────────────────────────
@@ -98,10 +114,24 @@ export class HttpOnboardClient implements OnboardClient {
     const payload = this.buildPayload('onboard', params.tokenId);
     const signature = await signer.signMessage(digestForOnboard(payload));
 
+    let agentField: string | EncryptedAgentBundle = params.agentSource;
+    if (this.encrypt) {
+      if (!this.operatorPubKey) {
+        const h = await this.health();
+        if (!h.operatorPubKey) {
+          throw new Error(
+            'HttpOnboardClient: encrypt=true but server /health did not expose operatorPubKey — set encrypt=false or pin operatorPubKey',
+          );
+        }
+        this.operatorPubKey = h.operatorPubKey;
+      }
+      agentField = encryptAgentSource(params.agentSource, this.operatorPubKey);
+    }
+
     const body = {
       payload,
       signature,
-      agentSource: params.agentSource,
+      agentSource: agentField,
       genesisHash: params.genesisHash,
       symbol: (params.symbol ?? 'btcusdt').toLowerCase(),
       interval: params.interval ?? '15m',

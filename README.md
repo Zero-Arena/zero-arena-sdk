@@ -111,6 +111,10 @@ const owner = new Wallet(process.env.PRIVATE_KEY!);
 const onboard = new HttpOnboardClient({
   url: 'https://onboard-production-ed6c.up.railway.app',
   authToken: process.env.ONBOARD_AUTH_TOKEN, // required by the production deployment
+  // encrypt: true (default, since SDK 0.4) — auto-fetches the operator's
+  // secp256k1 pubkey from /health and ECIES-encrypts the agent source
+  // before posting. TLS-terminating intermediaries see only ciphertext.
+  // Set { encrypt: false } only for debugging.
 });
 
 const result = await onboard.onboard(
@@ -129,6 +133,19 @@ await onboard.offboard({ tokenId: 5n }, owner);
 ```
 
 Trust shift: from owner reputation (self-operate, cheatable) to Zero Arena's public operator reputation (one entity, accountable). v0.4 moves the orchestrator into a 0G Compute TEE; the HTTP surface and the SDK client interface stay the same.
+
+### Manual encryption
+
+If your stack can't use `HttpOnboardClient` directly (e.g. multi-sig signing in a separate process), encrypt the bundle yourself:
+
+```ts
+import { encryptAgentSource } from 'zeroarena';
+
+const health = await fetch('https://onboard-production-ed6c.up.railway.app/health').then((r) => r.json());
+const bundle = encryptAgentSource(readFileSync('./agent.ts', 'utf8'), health.operatorPubKey);
+// bundle = { scheme: "ecies-secp256k1-aes256gcm-v1", blob: "<base64>" }
+// POST it as `agentSource` in the onboard body — the server treats it identically.
+```
 
 ## Oracle (transfer flow)
 
