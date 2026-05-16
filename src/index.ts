@@ -29,6 +29,25 @@ export { oracleDigest } from './inft/OracleClient.js';
 export { HttpOracleClient, type HttpOracleClientConfig } from './inft/HttpOracleClient.js';
 export { LocalOracleClient, type LocalOracleClientConfig } from './inft/LocalOracleClient.js';
 
+// Onboard — operator-delegation client for zero-arena-be's `onboard` endpoint.
+export type {
+  OnboardClient,
+  OnboardParams,
+  OffboardParams,
+  OnboardResult,
+  OffboardResult,
+  OnboardHealth,
+  OnboardStatus,
+  MessageSigner,
+  SignedOnboardPayload,
+  OnboardAction,
+} from './onboard/OnboardClient.js';
+export { digestForOnboard } from './onboard/OnboardClient.js';
+export {
+  HttpOnboardClient,
+  type HttpOnboardClientConfig,
+} from './onboard/HttpOnboardClient.js';
+
 export { runBacktest, WARMUP } from './backtest/BacktestEngine.js';
 // Paper trading (RFC-001) — bar-by-bar engine + streaming indicator state.
 export { PaperEngine, PAPER_WARMUP } from './backtest/PaperEngine.js';
