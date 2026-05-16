@@ -13,10 +13,12 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write   # create GitHub Releases
       id-token: write   # enables npm provenance
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0   # full history so release notes can diff against the previous tag
 
       - uses: actions/setup-node@v6
         with:
@@ -31,3 +33,19 @@ jobs:
       - run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub Release (tag-triggered runs only)
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          name: zeroarena ${{ github.ref_name }}
+          body: |
+            **npm:** [`zeroarena@${{ github.ref_name }}`](https://www.npmjs.com/package/zeroarena) (strip the `v` to see the version page)
+            **GitHub Packages mirror:** [`@zero-arena/sdk`](https://github.com/orgs/Zero-Arena/packages/npm/package/sdk)
+
+            Install:
+
+            ```bash
+            npm install zeroarena
+            ```
