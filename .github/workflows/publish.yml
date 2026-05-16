@@ -3,6 +3,11 @@ name: publish
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    # Manual trigger for re-runs after a secret rotation or publish
+    # hiccup. Reads the version from package.json — npm rejects
+    # republishing the same version, so to actually cut a release bump
+    # the version + push a new tag.
 
 jobs:
   publish:
