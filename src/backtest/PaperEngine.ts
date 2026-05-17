@@ -46,6 +46,25 @@ import { StreamingIndicators } from "./streaming-indicators.js";
 
 export const PAPER_WARMUP = 26;
 
+/**
+ * Resolve the effective warmup gate. Returns `PAPER_WARMUP` (26) by default;
+ * operators running the live paper engine can lower it via the
+ * `PAPER_WARMUP_OVERRIDE` env (e.g. `0` for zero-warmup agents like
+ * AlwaysLong, or `5` for short-lookback RSI variants). Off-chain backtests
+ * keep the canonical 26 — only the live runner exposes the env on Railway.
+ *
+ * The override never affects the `agentHash` (it isn't in `toJSON`) so it
+ * remains a runtime-only knob; certificates produced under default warmup
+ * stay verifiable.
+ */
+export function effectivePaperWarmup(): number {
+  const raw = process.env.PAPER_WARMUP_OVERRIDE;
+  if (raw === undefined || raw === '') return PAPER_WARMUP;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return PAPER_WARMUP;
+  return Math.floor(n);
+}
+
 export class PaperEngine {
   /** True after construction; flipped to false after stop() / finalize(). */
   private running = true;
@@ -115,7 +134,7 @@ export class PaperEngine {
       }
 
       // 2. Agent decision at close.
-      if (i >= PAPER_WARMUP) {
+      if (i >= effectivePaperWarmup()) {
         const observation: Observation = {
           timestamp: candle.timestamp,
           index: i,
@@ -177,7 +196,7 @@ export class PaperEngine {
       }
 
       // 4. Agent decision at close.
-      if (i >= PAPER_WARMUP) {
+      if (i >= effectivePaperWarmup()) {
         const observation: Observation = {
           timestamp: candle.timestamp,
           index: i,
