@@ -29,6 +29,9 @@ export interface TransferProofRequest {
   sealedKeyHash: string;
   /** keccak256 of the freshly re-encrypted envelope on 0G Storage. */
   newMetadataHash: string;
+  /** Per-token transfer nonce — must equal `ZeroArenaINFT.transferNonce(tokenId)`
+   *  at submit time. Bound into the proof to prevent replay (M3). */
+  nonce: bigint;
   /** Seconds since epoch. The on-chain verifier rejects after this. */
   deadline: bigint;
 }
@@ -50,7 +53,7 @@ export interface OracleClient {
 export function oracleDigest(req: TransferProofRequest): string {
   return keccak256(
     AbiCoder.defaultAbiCoder().encode(
-      ['uint256', 'address', 'uint256', 'address', 'address', 'bytes32', 'bytes32', 'uint256'],
+      ['uint256', 'address', 'uint256', 'address', 'address', 'bytes32', 'bytes32', 'uint256', 'uint256'],
       [
         req.chainId,
         req.inftAddress,
@@ -59,6 +62,7 @@ export function oracleDigest(req: TransferProofRequest): string {
         req.to,
         req.sealedKeyHash,
         req.newMetadataHash,
+        req.nonce,
         req.deadline,
       ],
     ),

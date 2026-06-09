@@ -24,6 +24,7 @@ import {
   type SignedOnboardPayload,
 } from './OnboardClient.js';
 import { encryptAgentSource, type EncryptedAgentBundle } from './crypto.js';
+import { keccak256, toUtf8Bytes } from 'ethers';
 
 export interface HttpOnboardClientConfig {
   /** Base URL of the onboard service. Trailing slash optional. */
@@ -111,7 +112,24 @@ export class HttpOnboardClient implements OnboardClient {
       throw new Error('onboard: genesisHash must be a 0x-prefixed 32-byte hex');
     }
 
-    const payload = this.buildPayload('onboard', params.tokenId);
+    // Bind the agent code + every run param into the signed payload (H4). The
+    // hash covers the PLAINTEXT source; the server re-hashes after decrypt.
+    const payload: SignedOnboardPayload = {
+      action: 'onboard',
+      tokenId: params.tokenId.toString(),
+      nonce: bytesToHex(this.randomBytes(16)),
+      deadline: String(this.nowSec() + this.deadlineWindowSec),
+      agentHash: keccak256(toUtf8Bytes(params.agentSource)),
+      genesisHash: params.genesisHash,
+      symbol: (params.symbol ?? 'btcusdt').toLowerCase(),
+      interval: params.interval ?? '15m',
+      market: params.market ?? 'spot',
+      barsPerEpoch: String(params.barsPerEpoch ?? 96),
+      initialBalance: String(params.initialBalance ?? 10_000),
+      leverage: String(params.leverage ?? 1),
+      feeBps: String(params.feeBps ?? 10),
+      slippageBps: String(params.slippageBps ?? 5),
+    };
     const signature = await signer.signMessage(digestForOnboard(payload));
 
     let agentField: string | EncryptedAgentBundle = params.agentSource;
@@ -128,21 +146,8 @@ export class HttpOnboardClient implements OnboardClient {
       agentField = encryptAgentSource(params.agentSource, this.operatorPubKey);
     }
 
-    const body = {
-      payload,
-      signature,
-      agentSource: agentField,
-      genesisHash: params.genesisHash,
-      symbol: (params.symbol ?? 'btcusdt').toLowerCase(),
-      interval: params.interval ?? '15m',
-      market: params.market ?? 'spot',
-      barsPerEpoch: params.barsPerEpoch ?? 96,
-      initialBalance: params.initialBalance ?? 10_000,
-      leverage: params.leverage ?? 1,
-      feeBps: params.feeBps ?? 10,
-      slippageBps: params.slippageBps ?? 5,
-    };
-
+    // Run params now live inside the signed payload, not as loose body fields.
+    const body = { payload, signature, agentSource: agentField };
     return this.post<OnboardResult>('/onboard', body);
   }
 

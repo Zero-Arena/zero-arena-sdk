@@ -80,21 +80,31 @@ export interface SignedOnboardPayload {
   tokenId: string;
   nonce: string;
   deadline: string;
+  // Present iff action === 'onboard' — binds the run to the owner's signature.
+  agentHash?: string; // 0x keccak256(utf8(agent source plaintext))
+  genesisHash?: string;
+  symbol?: string;
+  interval?: string;
+  market?: 'spot' | 'perp';
+  barsPerEpoch?: string;
+  initialBalance?: string;
+  leverage?: string;
+  feeBps?: string;
+  slippageBps?: string;
 }
 
-/** Build the deterministic JSON the owner signs. Must match the operator's
- * `digestFor()` byte-for-byte — keep both implementations in lockstep. */
+/**
+ * Canonical JSON the owner signs: sorted keys, no whitespace, every value
+ * coerced to a string, `undefined` dropped. MUST stay byte-for-byte identical
+ * to the operator's `digestFor()` (zero-arena-be onboard/auth.ts) and the FE's
+ * `payloadToSigningString()` (zero-arena-fe lib/be/onboard.ts).
+ */
 export function digestForOnboard(payload: SignedOnboardPayload): string {
-  return JSON.stringify(
-    {
-      action: payload.action,
-      deadline: payload.deadline,
-      nonce: payload.nonce,
-      tokenId: payload.tokenId,
-    },
-    null,
-    0,
-  );
+  const obj: Record<string, string> = {};
+  for (const [k, v] of Object.entries(payload)) {
+    if (v !== undefined && v !== null) obj[k] = String(v);
+  }
+  return JSON.stringify(obj, Object.keys(obj).sort());
 }
 
 export interface OnboardClient {

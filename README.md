@@ -14,10 +14,10 @@
 | 0G Storage indexer | `https://indexer-storage-turbo.0g.ai` |
 | 0G Explorer | [chainscan.0g.ai](https://chainscan.0g.ai) |
 | `AgentCertificate` | `0x21a5DEA59cfA07B261d389A9554477e137805c2f` |
-| `ZeroArenaINFT` | `0x4Bd4d45f206861aa7cD4421785a316A1dD06036f` |
-| `ReencryptionOracle` | `0x63909dA30b0d65ad72b32b3C8C82515f7BFA6Fd6` |
-| `LiveCertificate` | `0x168c244c872f5FC2D737D3126D08e9EEE45fFbc7` |
-| `Season` | `0x4e900860565F9D399B7295c0D28CC7954202524e` |
+| `ZeroArenaINFT` | `0x6a04821A1C7412D09d7E8c938179C8cAA795B7BC` |
+| `ReencryptionOracle` | `0x5514892c89385c0788E223EBbA9d6D6c219836F3` |
+| `LiveCertificate` | `0x3f703dc5d20AdAC3Eda08eD6dd180558EAE8003f` |
+| `Season` | `0x440c4A3Cf3B97DA7616F7Da457cb1FEF0862a1Ad` |
 
 These addresses ship pre-pinned via `npx zeroarena init` — you usually don't need to copy them by hand.
 

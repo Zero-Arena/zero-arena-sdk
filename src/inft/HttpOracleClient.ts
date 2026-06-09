@@ -42,6 +42,7 @@ export class HttpOracleClient implements OracleClient {
       to: req.to,
       sealedKeyHash: req.sealedKeyHash,
       newMetadataHash: req.newMetadataHash,
+      nonce: req.nonce.toString(),
       deadline: req.deadline.toString(),
     });
 

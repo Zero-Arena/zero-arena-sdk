@@ -83,6 +83,9 @@ export class TransferAdapter {
     const deadline = BigInt(
       Math.floor(Date.now() / 1000) + (this.cfg.deadlineSec ?? PROOF_TTL_SECONDS),
     );
+    // Read the current per-token nonce so the proof matches what transfer()
+    // will verify on-chain (M3).
+    const nonce = (await inft.transferNonce!(input.tokenId)) as bigint;
     const signature = await this.cfg.oracle.signTransferProof({
       chainId: network.chainId,
       inftAddress,
@@ -91,6 +94,7 @@ export class TransferAdapter {
       to: input.to,
       sealedKeyHash,
       newMetadataHash,
+      nonce,
       deadline,
     });
 

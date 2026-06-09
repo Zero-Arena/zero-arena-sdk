@@ -20,6 +20,7 @@ export const ZERO_ARENA_INFT_ABI = [
   'function metadataHashes(uint256 tokenId) external view returns (bytes32)',
   'function storageRoots(uint256 tokenId) external view returns (bytes32)',
   'function certificateOf(uint256 tokenId) external view returns (uint256)',
+  'function transferNonce(uint256 tokenId) external view returns (uint256)',
   'function nextTokenId() external view returns (uint256)',
   'function oracle() external view returns (address)',
   'event AgentMinted(uint256 indexed tokenId, address indexed owner, uint256 indexed certificateId, bytes32 metadataHash, bytes32 storageRoot)',
@@ -29,7 +30,7 @@ export const ZERO_ARENA_INFT_ABI = [
 
 export const REENCRYPTION_ORACLE_ABI = [
   'function signer() external view returns (address)',
-  'function verifyTransfer(address inft, uint256 tokenId, address from, address to, bytes32 sealedKeyHash, bytes32 newMetadataHash, uint256 deadline, bytes signature) external view returns (bool)',
+  'function verifyTransfer(address inft, uint256 tokenId, address from, address to, bytes32 sealedKeyHash, bytes32 newMetadataHash, uint256 nonce, uint256 deadline, bytes signature) external view returns (bool)',
 ] as const;
 
 /** Tier byte the contract expects. */
