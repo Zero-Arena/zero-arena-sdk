@@ -31,8 +31,8 @@ const MAINNET = {
   rpc: 'https://evmrpc.0g.ai',
   indexer: 'https://indexer-storage-turbo.0g.ai',
   cert: '0x21a5DEA59cfA07B261d389A9554477e137805c2f',
-  inft: '0x4Bd4d45f206861aa7cD4421785a316A1dD06036f',
-  oracle: '0x63909dA30b0d65ad72b32b3C8C82515f7BFA6Fd6',
+  inft: '0x6a04821A1C7412D09d7E8c938179C8cAA795B7BC',
+  oracle: '0x5514892c89385c0788E223EBbA9d6D6c219836F3',
 };
 
 type StrategyKey = 'rsi' | 'macd' | 'ema' | 'llm' | 'custom';
